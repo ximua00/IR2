@@ -71,8 +71,8 @@ class BaseData:
         return data
 
     def make_mappings(self):
-        word2idx = {}
-        idx2word = {}
+        word2idx = {PAD_WORD:PAD_INDEX, START_WORD:START_INDEX, END_WORD:END_INDEX, UNK_WORD:UNK_INDEX}
+        idx2word = {PAD_INDEX:PAD_WORD, START_INDEX:START_WORD, END_INDEX:END_WORD, UNK_INDEX:UNK_WORD}
 
         word_counter = Counter(self.text_data)
 
@@ -81,7 +81,7 @@ class BaseData:
             for word in self.data[review_id]["reviewSplitText"]:
                 if word_counter[word] > self.unk_frequency:
                     # Add to the vocabulary
-                    if word not in self.word2idx.keys():
+                    if word not in word2idx.keys():
                         self.index_counter += 1
                         word2idx[word] = self.index_counter
                         idx2word[self.index_counter] = word
