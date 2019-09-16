@@ -102,7 +102,7 @@ class BaseData:
         train_len = int(train_split * data_size)
         val_len = int(val_split * data_size)
         test_len = int(test_split * data_size)
-        review_ids = [i for i in range(1, data_size+1)]
+        review_ids = [i for i in range(0, data_size)]
         review_ids = np.random.permutation(review_ids)
         #Train set
         for i in range(train_len):
