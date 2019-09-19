@@ -52,7 +52,7 @@ class BaseData:
                     data[reviewID]["userID"] = self.user_idx_counter
                     self.user_idx[line_data["reviewerID"]] = self.user_idx_counter
 
-                if line_data["asin"] in self.user_idx.keys():
+                if line_data["asin"] in self.item_idx.keys():
                     data[reviewID]["itemID"] = self.item_idx[line_data["asin"]]
                 else:
                     self.item_idx_counter += 1
