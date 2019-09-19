@@ -1,0 +1,48 @@
+y_train = overall_ratings (Train)
+y_valid = overall_ratings (Validation)
+
+The function load_data_and_labels takes
+    - train_data - training csv file
+    - valid_data - validation csv file
+    - user_review - Dictionary {user ID: [review_1, review_2, ...], ...}
+    - item_review - Dictionary {item ID: [review_1, review_2, ...], ...}
+    - user_rid - Dictionary {user ID: [item_id1, item_id2, ...], ...}
+    - item_rid - Dictionary {item ID: [user_id1, user_id2, ...], ...}    
+    and returns
+    - u_text = Dictionary containing {User ID 1: [[tokenized_review_1], [tokenized_review_2], ...], User ID 2: [[], [], ...], ....}
+    - i_text = Dictionary containing {Item ID 1: [[tokenized_review_1], [tokenized_review_2], ...], Item ID 2: [[], [], ...], ....}
+    - y_train = List containing the overall ratings per line (Train)
+    - y_valid = List containing the overall ratings per line (Validation)
+    - u_len = The maximum number of user reviews
+    - i_len = The maximum number of item reviews
+    - u2_len = The maximum user review length
+    - i2_len = The maximum item review length
+    - uid_train = List of user IDs in the training set
+    - iid_train = List of item IDs in the training set
+    - uid_valid = List of user IDs in the validation set
+    - iid_valid = List of item IDs in the validation set
+    - user_num = Number of users
+    - item_num = Number of items
+    - reid_user_train = List of lists; each sub list is a list of item ids corresponding to the user id at a particular index (Train)
+    - reid_item_train = List of lists; each sub list is a list of user ids corresponding to the item id at a particular index (Train)
+    - reid_user_valid = List of lists; each sub list is a list of item ids corresponding to the user id at a particular index (Validation)
+    - reid_item_valid = List of lists; each sub list is a list of user ids corresponding to the item id at a particular index (Validation)
+
+The function pad_review_id takes
+    - reid_user_train = List of lists; each sub list is a list of item ids corresponding to the user id at a particular index (Train)
+    - reid_user_valid = List of lists; each sub list is a list of item ids corresponding to the user id at a particular index (Validation)
+    - u_len = The maximum number of user reviews
+    - item_num = The number of items
+    and returns
+    - pad_user_train = List of lists; now each sub-list has been extended or trimmed to the max no. of reviews
+    - pad_user_valid = List of lists; now each sub-list has been extended or trimmed to the max no. of reviews
+
+The function build_vocab takes
+    - user_voc = List of Lists; each sub-list is a tokenized review
+    - item_voc = List of lists; each sub-list is a tokenized review
+    and returns
+    - vocabulary_user = Word to index dictionary made from user reviews (dictionary)
+    - vocabulary_inv_user = List of alphabetically sorted words
+    - vocabulary_item = Word to index dictionary made from item reviews (dictionary)
+    - vocabulary_inv_item = List of alphabetically sorted words
+

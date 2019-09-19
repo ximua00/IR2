@@ -1,0 +1,8 @@
+Fields
+Reviewer ID: alphanumeric string
+asin (item ID): alphanumeric string
+ReviewerName: alphanumeric string
+helpful: list [no of people who found it useful, total people who rated the review]
+reviewText: string
+overall: float
+summary: string
