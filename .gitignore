@@ -26,3 +26,5 @@ Temporary Items
 .apdisk
 *.pkl
 *.pyc
+*.xml
+*.iml
