@@ -24,9 +24,18 @@ class KGRAMS(nn.Module):
                                   latent_size=latent_size)
 
 
-    def forward(self, target_user_id, user_revs, review_user_ids, target_item_id, item_revs, review_item_ids):
-        u = self.user_net(target_user_id, user_revs, review_item_ids, self.word_embeddings)
-        i = self.item_net(target_item_id, item_revs, review_user_ids, self.word_embeddings)
+    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews):
+        #Iterating through reviews of each user
+        for index, target_user_id in enumerate(user_ids):
+            one_user_revs = user_reviews[index]  #Tensor of size: #reviews X review_length
+            review_item_ids = item_ids_of_reviews[index] #Tensor of size: #reviews X 1
+            u = self.user_net(target_user_id, one_user_revs, review_item_ids, self.word_embeddings)
+
+        # Iterating through reviews of each item
+        for index, target_item_id in enumerate(item_ids):
+            one_item_revs = item_reviews[index]  #Tensor of size: #reviews X review_length
+            review_user_ids = user_ids_of_reviews[index] #Tensor of size: #reviews
+            i = self.item_net(target_item_id, one_item_revs, review_user_ids, self.word_embeddings)
 
 
 class EntityNet(nn.Module):
@@ -49,56 +58,57 @@ class EntityNet(nn.Module):
         self.b2 = nn.Parameter(torch.rand(1))
         self.h = nn.Parameter(torch.rand(hidden_size))
 
-        self.softmax = nn.Softmax(dim=2)
+        self.softmax = nn.Softmax(dim=1)
         self.linear = nn.Linear(out_channels, latent_size)
 
     def forward(self, target_id, reviews, review_ids, word_embeddings):
-        attentions = []
-        features = []
-        # for review, review_id in zip(reviews, review_ids):
-        reviews_stacked = torch.stack(reviews, dim=0)
-        print(reviews_stacked.size())
-        rev_embeddings = word_embeddings(reviews_stacked).view()
+        #Processes all reviews corresponding to one user/item in a batch
+        batch_size = reviews.size(0)
+        rev_embeddings = word_embeddings(reviews)   # o/p size: #reviews X review_length X embedding_size
         input_embeddings = rev_embeddings.view(rev_embeddings.size(0), 1, rev_embeddings.size(1), rev_embeddings.size(2))
-        x = self.conv2d(input_embeddings)
+        x = self.conv2d(input_embeddings)  #o/p size:  batch_size * out_channels * filter_out_size1 * filter_out_size2
         x = self.relu(x)
-        review_feats = self.max_pool(x).squeeze() #4D : batch_size(1) * out_channels * height(1) * width(1)
-        review_feats = review_feats.view(-1, 1)
-        score_embedding = self.entity_score_embeddings(review_id).view(-1, 1)
-        review_attention = torch.mm(self.h.view(1, -1), self.relu(torch.mm(self.W_O, review_feats) + torch.mm(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
-        features.append(review_feats)
-        attentions.append(review_attention)
-
-        attentions_stack = torch.stack(attentions, dim=2)  # batch_size * attentions * #reviews
-        attentions_stack = self.softmax(attentions_stack).view(1, -1)
-        features_stack = torch.stack(features, dim=2) #features * batch_size * #reviews
-        reviews_importance = (attentions_stack * features_stack).sum(dim=2).view(1, -1)
+        review_feats = self.max_pool(x).squeeze().t() #4D : batch_size * out_channels * 1 * 1
+        score_embedding = self.entity_score_embeddings(review_ids).view(-1, batch_size)
+        review_attentions = torch.mm(self.h.view(1, -1), self.relu(torch.mm(self.W_O, review_feats) + torch.mm(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
+        review_attentions = self.softmax(review_attentions)  #1 X batch_size
+        reviews_importance = torch.mm(review_attentions, review_feats.t() )
         entity_features = self.linear(reviews_importance)
-        # print("review_feats size ", review_feats.size(), "features_stack size ", features_stack.size())
-        # print("review_attention size ", review_attention.size(), "attentions_stack size ", attentions_stack.size())
-        # print("reviews_importance size ", reviews_importance.size())
-        # print("Entity features size ", entity_features.size())
         return entity_features
 
+
+
+#Expected datastructure
+#User Entity Net needs the following(Similarly for item entity net):
+#Note: Inside list structure we have tensors.
+#user_ids = [user1_id, user2_id, .....]
+
+# user_reviews = [ [user1_reviews], [user2_reviews],... ]
+# user1_reviews = no_of_reviews X review_length
+
+# item_ids_of_reviews = [ [item_ids_of_user1_reviews], [item_ids_of_user2_reviews], ....  ]
+# item_ids_of_user1_reviews = no_of_reviews X 1   i,e one item_id for each review of one user
+
+
 if __name__ == "__main__":
-    batch_size=5
+    #dummy inputs
+    batch_size=9
     item_reviews = [torch.randint(low=0, high=2, size=(batch_size,80)), torch.randint(low=0, high=2, size=(batch_size,80))]
     user_reviews = [torch.randint(low=0, high=2, size=(batch_size,80)), torch.randint(low=0, high=2, size=(batch_size,80))]
 
     review_user_ids = [torch.randint(low=0, high=1, size=(batch_size,1)), torch.randint(low=0, high=1, size=(batch_size,1))]
     review_item_ids = [torch.randint(low=0, high=2, size=(batch_size, 1)), torch.randint(low=0, high=2, size=(batch_size, 1))]
 
-    target_user_id = torch.randint(low=0, high = 1, size=(batch_size,1))
-    target_item_id = torch.randint(low=0, high=2, size=(batch_size,1))
-
+    target_user_id = [torch.randint(low=0, high = 1, size=(1,1)), torch.randint(low=0, high = 1, size=(1,1))]
+    target_item_id = [torch.randint(low=0, high=2, size=(1,1)), torch.randint(low=0, high=2, size=(1,1))]
 
     model = KGRAMS(embedding_size = 100, vocab_size = 3 , out_channels = 100, filter_size = 3, review_length=80, user_id_size = 2, item_id_size = 3, embedding_id_size = 100, hidden_size = 50, latent_size=70)
 
-    model(target_user_id = target_user_id,
-          user_revs = user_reviews,
-          review_user_ids = review_user_ids,
-          target_item_id=target_item_id,
-          item_revs = item_reviews,
-          review_item_ids = review_item_ids)
+    model(user_ids = target_user_id,
+          user_reviews = user_reviews,
+          user_ids_of_reviews = review_user_ids,
+          item_ids = target_item_id,
+          item_reviews = item_reviews,
+          item_ids_of_reviews = review_item_ids)
 
     # print(model)
