@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class KGRAMS(nn.Module):
-    def __init__(self, embedding_size, vocab_size, out_channels, filter_size, review_length, user_id_size, item_id_size, embedding_id_size, hidden_size, latent_size)    :
+    def __init__(self, embedding_size, vocab_size, out_channels, filter_size, num_pair_reviews, review_length, user_id_size, item_id_size, embedding_id_size, hidden_size, latent_size)    :
         super(KGRAMS, self).__init__()
         self.word_embeddings = nn.Embedding(num_embeddings=vocab_size,
                                             embedding_dim=embedding_size)
@@ -23,20 +23,38 @@ class KGRAMS(nn.Module):
                                   hidden_size=hidden_size,
                                   latent_size=latent_size)
 
+        self.W_1 = nn.Parameter(torch.rand(1,embedding_id_size+latent_size))
+        self.b_u = nn.Parameter(torch.rand(num_pair_reviews))
+        self.b_i = nn.Parameter(torch.rand(num_pair_reviews))
+        self.mu = nn.Parameter(torch.rand(num_pair_reviews))
+
 
     def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews):
+        num_users_reviews = len(user_reviews)
+        num_items_reviews = len(item_reviews)
         #Iterating through reviews of each user
+        users_features = []
         for index, target_user_id in enumerate(user_ids):
             one_user_revs = user_reviews[index]  #Tensor of size: #reviews X review_length
             review_item_ids = item_ids_of_reviews[index] #Tensor of size: #reviews X 1
             u = self.user_net(target_user_id, one_user_revs, review_item_ids, self.word_embeddings)
+            users_features.append(u)
 
         # Iterating through reviews of each item
+        items_features = []
         for index, target_item_id in enumerate(item_ids):
             one_item_revs = item_reviews[index]  #Tensor of size: #reviews X review_length
             review_user_ids = user_ids_of_reviews[index] #Tensor of size: #reviews
             i = self.item_net(target_item_id, one_item_revs, review_user_ids, self.word_embeddings)
+            items_features.append(i)
 
+        stacked_users_feats = torch.stack(users_features, dim=0).view(num_users_reviews, -1)
+        stacked_items_feats = torch.stack(items_features, dim=0).view(num_items_reviews, -1)
+        #element-wise product
+        user_item_features = stacked_users_feats * stacked_items_feats
+        #prediction
+        predicted_rating = torch.matmul(self.W_1, user_item_features.t()) + self.b_u + self.b_i + self.mu
+        print(predicted_rating)
 
 class EntityNet(nn.Module):
     def __init__(self, embedding_id_size, out_channels, filter_size, review_length, score_size, id_size, hidden_size, latent_size):
@@ -74,6 +92,8 @@ class EntityNet(nn.Module):
         review_attentions = self.softmax(review_attentions)  #1 X batch_size
         reviews_importance = torch.mm(review_attentions, review_feats.t() )
         entity_features = self.linear(reviews_importance)
+        target_id_embedding = self.entity_id_embeddings(target_id).view(1, -1)
+        entity_features = torch.cat((target_id_embedding, entity_features),dim=1)  #1 X (embedding_id_size + latent_size)
         return entity_features
 
 
@@ -102,7 +122,9 @@ if __name__ == "__main__":
     target_user_id = [torch.randint(low=0, high = 1, size=(1,1)), torch.randint(low=0, high = 1, size=(1,1))]
     target_item_id = [torch.randint(low=0, high=2, size=(1,1)), torch.randint(low=0, high=2, size=(1,1))]
 
-    model = KGRAMS(embedding_size = 100, vocab_size = 3 , out_channels = 100, filter_size = 3, review_length=80, user_id_size = 2, item_id_size = 3, embedding_id_size = 100, hidden_size = 50, latent_size=70)
+    total_revs = len(user_reviews)
+
+    model = KGRAMS(embedding_size = 100, vocab_size = 3 , out_channels = 100, filter_size = 3, num_pair_reviews = total_revs, review_length=80, user_id_size = 2, item_id_size = 3, embedding_id_size = 100, hidden_size = 50, latent_size=70)
 
     model(user_ids = target_user_id,
           user_reviews = user_reviews,

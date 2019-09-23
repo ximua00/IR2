@@ -4,7 +4,7 @@ from pprint import pprint
 import numpy as np
 import re
 
-np.random.seed(69)
+np.random.seed(2017)
 
 PAD_INDEX = 0
 PAD_WORD = '<PAD>'
