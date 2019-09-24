@@ -28,3 +28,5 @@ Temporary Items
 *.pyc
 *.xml
 *.iml
+*.json
+*.gz

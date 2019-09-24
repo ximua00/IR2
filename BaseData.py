@@ -116,9 +116,9 @@ class BaseData:
 
         return train_set, val_set, test_set
 
-
-if __name__ == "__main__":
-    base_data = BaseData("./data/Musical_Instruments_5.json")
+#
+# if __name__ == "__main__":
+#     base_data = BaseData("./data/Automotive_5.json")
 
     # basedata is an instance of the BaseData class
     # base_data.train_data/val_data/test_data outputs a defaultdictionary with review_ids as key.
