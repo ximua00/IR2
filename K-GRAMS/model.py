@@ -25,6 +25,7 @@ class KGRAMS(nn.Module):
                                   id_size=item_id_size,
                                   hidden_size=hidden_size,
                                   latent_size=latent_size)
+
         #Rating prediction layer
         self.W_1 = nn.Parameter(torch.rand(1,embedding_id_size+latent_size))
         self.b_u = nn.Parameter(torch.rand(num_of_user_item_pairs))
@@ -34,8 +35,8 @@ class KGRAMS(nn.Module):
         self.rating_loss = nn.MSELoss(reduction = 'mean')
         #Review generation part
         #To initialize state of lstm with the item_id+user_id embeddings
-        self.linear_c0 = nn.Linear((2 * (embedding_id_size + latent_size)), hidden_size) #hidden size should be number of hidden dimensions of the LSTM state
-        self.linear_h0 = nn.Linear((2 * (embedding_id_size + latent_size)), hidden_size)  # hidden size should be number of hidden dimensions of the LSTM state
+        self.linear_c0 = nn.Linear((user_id_size + item_id_size), hidden_size) #hidden size should be number of hidden dimensions of the LSTM state
+        self.linear_h0 = nn.Linear((user_id_size + item_id_size), hidden_size)  # hidden size should be number of hidden dimensions of the LSTM state
         self.tanh = nn.Tanh()
         #lstm
         self.num_of_lstm_layers = 1
@@ -46,17 +47,17 @@ class KGRAMS(nn.Module):
         users_features =  self.get_entity_features(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings, self.user_net)
         items_features =  self.get_entity_features(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings, self.item_net)
         #element-wise product
-        user_item_features = users_features * items_features
-        # print("user features size: ", users_features.size(), "Item features size: ", items_features.size())
+        user_item_features = users_features * items_features  #h_0 = q_u + X_u * p_i + Y_i
         #rating prediction
         predicted_rating = torch.matmul(self.W_1, user_item_features.t()) + self.b_u + self.b_i + self.mu
-        #Sentiment features????
         #calculate loss
         stacked_target_rating = torch.stack(target_ratings, dim=0).view(1, -1)
         rating_pred_loss = self.rating_loss(predicted_rating, stacked_target_rating).squeeze()
-        rating_pred_loss.backward()
+        rating_pred_loss.backward() #updates user embedding and item embeddings. Use updated embeddings to initialize lstm
         #LSTM part
-        encoded_reviews = self.encode_reviews(users_features, items_features, torch.stack(target_reviews, dim=0))
+        user_embeddings = self.user_net.entity_id_embeddings(torch.stack(user_ids, dim=0).squeeze())   #Updated embeddings
+        item_embeddings = self.item_net.entity_id_embeddings(torch.stack(item_ids, dim=0).squeeze())
+        encoded_reviews = self.encode_reviews(user_embeddings, item_embeddings, user_item_features, torch.stack(target_reviews, dim=0))
 
     def get_entity_features(self, entity_ids, entity_reviews, entity_score_ids, word_embeddings, entity_network):
         entity_features = []
@@ -69,13 +70,15 @@ class KGRAMS(nn.Module):
         return stacked_entity_feats
 
     def init_lstm(self, init_values):
+        print(init_values.size())
         c0 = self.tanh(self.linear_c0(init_values)).view(self.num_of_lstm_layers * 1, self.num_of_user_item_pairs, -1)
         h0 = self.tanh(self.linear_h0(init_values)).view(self.num_of_lstm_layers * 1, self.num_of_user_item_pairs, -1)
         return (h0, c0)
 
-    def encode_reviews(self, users_features, items_features, reviews):
-        z1 = torch.cat([users_features, items_features], dim=1)
+    def encode_reviews(self, user_embeddings, item_embeddings, sentiment_feats, reviews):
+        z1 = torch.cat([user_embeddings, item_embeddings], dim=1)
         (h0, c0) = self.init_lstm(z1)
+        #TODO: append every word embedding with sentiment feats
         review_embeddings = self.word_embeddings(reviews).squeeze()
         _, (h0, c0) = self.encoder(review_embeddings, (h0, c0))
         #   concat each word_embedding of the review with the sentiment_feat
@@ -119,9 +122,9 @@ class EntityNet(nn.Module):
         review_attentions = torch.mm(self.h.view(1, -1), self.relu(torch.mm(self.W_O, review_feats) + torch.mm(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
         review_attentions = self.softmax(review_attentions)  #1 X num_of_reviews
         reviews_importance = torch.mm(review_attentions, review_feats.t() )
-        entity_features = self.linear(reviews_importance)
-        target_id_embedding = self.entity_id_embeddings(target_id).view(1, -1)
-        entity_features = torch.cat((target_id_embedding, entity_features),dim=1)  #1 X (embedding_id_size + latent_size)
+        entity_features = self.linear(reviews_importance) #Y_i =W_0 * O_i + b_0
+        target_id_embedding = self.entity_id_embeddings(target_id).view(1, -1) #p_i
+        entity_features = torch.cat((target_id_embedding, entity_features),dim=1)  #1 X (embedding_id_size + latent_size)  --- p_i + Y_i
         return entity_features
 
 

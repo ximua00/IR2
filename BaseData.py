@@ -3,6 +3,7 @@ from collections import defaultdict, Counter
 from pprint import pprint
 import numpy as np
 import re
+import pickle
 
 np.random.seed(2017)
 
@@ -116,9 +117,32 @@ class BaseData:
 
         return train_set, val_set, test_set
 
+    def dump_pickle(self, root_dir, data_set_name):
+        data_set = data_set_name.split(".")[0]
+        train_pkl = root_dir + data_set + "_train.pkl"
+        val_pkl = root_dir + data_set + "_val.pkl"
+        test_pkl = root_dir + data_set + "_test.pkl"
+        #Train data
+        pickle_file = open(train_pkl, 'wb')
+        print("Dumping pickle : ", train_pkl)
+        pickle.dump(self.train_data, pickle_file)
+        #Validation data
+        pickle_file = open(val_pkl, 'wb')
+        print("Dumping pickle : ", val_pkl)
+        pickle.dump(self.val_data, pickle_file)
+        #Test data
+        pickle_file = open(test_pkl, 'wb')
+        print("Dumping pickle : ", test_pkl)
+        pickle.dump(self.test_data, pickle_file)
+
 #
-# if __name__ == "__main__":
-#     base_data = BaseData("./data/Automotive_5.json")
+if __name__ == "__main__":
+    root_dir = "./data/"
+    data_set_name = "Digital_Music_5.json"
+    data_path = root_dir+data_set_name
+    print("Processing Data - ", data_path)
+    base_data = BaseData(data_path)
+    base_data.dump_pickle(root_dir, data_set_name)
 
     # basedata is an instance of the BaseData class
     # base_data.train_data/val_data/test_data outputs a defaultdictionary with review_ids as key.
