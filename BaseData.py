@@ -122,6 +122,8 @@ class BaseData:
         train_pkl = root_dir + data_set + "_train.pkl"
         val_pkl = root_dir + data_set + "_val.pkl"
         test_pkl = root_dir + data_set + "_test.pkl"
+        word2idx_pkl = root_dir + data_set + "_word2idx.pkl"
+        idx2word_pkl = root_dir + data_set + "_idx2word.pkl"
         #Train data
         pickle_file = open(train_pkl, 'wb')
         print("Dumping pickle : ", train_pkl)
@@ -134,6 +136,14 @@ class BaseData:
         pickle_file = open(test_pkl, 'wb')
         print("Dumping pickle : ", test_pkl)
         pickle.dump(self.test_data, pickle_file)
+        # word2idx data
+        pickle_file = open(word2idx_pkl, 'wb')
+        print("Dumping pickle : ", word2idx_pkl)
+        pickle.dump(self.word2idx, pickle_file)
+        # idx2word data
+        pickle_file = open(idx2word_pkl, 'wb')
+        print("Dumping pickle : ", idx2word_pkl)
+        pickle.dump(self.idx2word, pickle_file)
 
 #
 if __name__ == "__main__":
