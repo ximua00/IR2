@@ -39,3 +39,6 @@ latent_size = 70
 
 # Vocabulary size
 vocab_size = 3
+
+# Maximum number of reviews
+max_reviews = 9

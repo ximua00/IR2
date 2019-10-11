@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 import config
-import model
+from model import view_generated_reviews
 
 # Setting up the device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -91,23 +91,3 @@ for epoch in range(config.total_epochs):
         # Generate reviews after every 100 batches
         if batch_num % 100 == 0:
             view_generated_reviews(raw_probabilities)
-
-def view_generated_reviews(raw_probabilities):
-
-    # Soft-maxing the raw probabilities
-    raw_probabilities = torch.exp(raw_probabilities) / torch.sum(torch.exp(raw_probabilities), dim = 2)
-
-    # Taking the max index
-    max_indices = torch.argmax(raw_probabilities, dim = 2)
-
-    # List of generated sentences
-    # generated_sentences = []
-
-    # Generating the sentences
-    for user_item_pair_index in range(max_indices.shape[0]):
-        generated_sentence = []
-        for word_index in max_indices[user_item_pair_index]:
-            generated_sentence.append(id_to_word(word_index))
-        print(' '.join(generated_sentence))
-        # generated_sentences.append(generated_sentence)
-

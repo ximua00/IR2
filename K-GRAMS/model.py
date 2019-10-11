@@ -1,11 +1,39 @@
+# Importing Libraries
 import torch
 import torch.nn as nn
+import config
 
+def view_generated_reviews(raw_probabilities):
+
+    # Soft-maxing the raw probabilities
+    # print(raw_probabilities.shape)
+    numerator = torch.exp(raw_probabilities)
+    denominator = torch.sum(torch.exp(raw_probabilities), dim = 1)
+    raw_probabilities = torch.div(numerator.t(), denominator).t()
+    # raw_probabilities = torch.exp(raw_probabilities) / torch.sum(torch.exp(raw_probabilities), dim = 1)
+
+    # Taking the max index
+    max_indices = torch.argmax(raw_probabilities, dim = 1)
+
+    # List of generated sentences
+    generated_sentences = []
+
+    # Generating the sentences
+    for user_item_pair_index in range(max_indices.shape[0]):
+        generated_sentence = []
+        for word_index in max_indices[user_item_pair_index]:
+            generated_sentence.append(id_to_word(word_index))
+        print(' '.join(generated_sentence))
+        # generated_sentences.append(generated_sentence)
+
+    return max_indices
+    
 class MRG(nn.Module):
 
     # Init function
-    def __init__(self, word_embedding_size = 300, id_embedding_size = 100, hidden_dim = 128, latent_size = 70, vocab_size = 3, num_of_lstm_layers = 1, num_directions = 1):
+    def __init__(self, word_embedding_size, id_embedding_size, hidden_dim, latent_size, vocab_size, num_of_lstm_layers = 1, num_directions = 1):
         super(MRG, self).__init__()
+        self.embedding_layer = nn.Embedding(vocab_size, word_embedding_size)
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         self.num_of_lstm_layers = num_of_lstm_layers
@@ -37,6 +65,12 @@ class MRG(nn.Module):
         
         # Initializing the hidden and cell states
         h0, c0 = self.initialize_lstm(user_item_id_concatenation, num_of_user_item_pairs)
+
+        # Converting to tensor
+        input_reviews = torch.stack(input_reviews, dim = 0)
+        input_reviews = input_reviews.type(torch.LongTensor)
+        input_reviews = input_reviews.squeeze()
+        input_reviews = self.embedding_layer(input_reviews)
 
         # Passing the input reviews through the LSTM
         all_hidden_state_outputs, (h0, c0) = self.lstm(input_reviews, (h0, c0))
@@ -99,30 +133,9 @@ class NARRE(nn.Module):
         items_features =  self.get_entity_features(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings, self.item_net)
         # Element-wise product
         user_item_features = users_features * items_features #[2, 170]
-        # print(user_item_features.shape)
-        # print("user features size: ", users_features.size(), "Item features size: ", items_features.size())
-        # Rating prediction             # 1 x 170   # 170 X 2
+        
         predicted_rating = torch.matmul(self.W_1, user_item_features.t()) + self.b_u + self.b_i + self.mu
-        # Sentiment features????
-        # Calculate loss
-        # stacked_target_rating = torch.stack(target_ratings, dim=0).view(1, -1)
-        # rating_pred_loss = self.rating_loss(predicted_rating, stacked_target_rating).squeeze()
-        # rating_pred_loss.backward()
-        # LSTM Encoder part
-        # user_ids_stack = torch.stack(user_ids, dim=0).squeeze()
-        # user_ids_stack = user_ids_stack.type(torch.LongTensor)
-        # item_ids_stack = torch.stack(item_ids, dim=0).squeeze()
-        # item_ids_stack = item_ids_stack.type(torch.LongTensor)
-        # user_embeddings = self.user_net.entity_id_embeddings(user_ids_stack)   #Updated embeddings
-        # item_embeddings = self.item_net.entity_id_embeddings(item_ids_stack)
-        # user_features_updated = torch.cat((user_embeddings, users_features[:, self.embedding_id_size:]), dim = 1)
-        # item_features_updated = torch.cat((item_embeddings, items_features[:, self.embedding_id_size:]), dim = 1)
-        # encoded_reviews, probabilities = self.encode_reviews(user_features_updated, item_features_updated, user_item_features, torch.stack(target_reviews, dim=0))
-        # # LSTM Decoder part
-        # probabilities = probabilities.view(probabilities.shape[0] * probabilities.shape[1], -1) # 160 X vocab_size
-        
-        # encoded_reviews = self.encode_reviews(users_features, items_features, torch.stack(target_reviews, dim=0))
-        
+       
         return predicted_rating, users_features, items_features, user_item_features
 
     def get_entity_features(self, entity_ids, entity_reviews, entity_score_ids, word_embeddings, entity_network):
@@ -227,29 +240,23 @@ class EntityNet(nn.Module):
 if __name__ == "__main__":
     #dummy inputs
 
-    # Number of reviews
-    number_of_reviews = 9
-
-    # Maximum review length
-    max_review_length = 80
-
     # List of Tensors : Each tensor (corresponding to an item) is of shape number_of_reviews X max_review_length
     # Each tensor corresponds to a datapoint which contains all the reviews on that item which is a part of that datapoint
     # Each row is a review consisting of word indices (0, 1, 2)
-    item_reviews = [torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length))]
+    item_reviews = [torch.randint(low=0, high=3, size=(config.max_reviews, config.max_review_length)), torch.randint(low=0, high=3, size=(config.max_reviews, config.max_review_length))]
 
     # List of Tensors : Each tensor (corresponding to a user) is of shape number_of_reviews X max_review_length 
     # Each row is a review consisting of word indices (0, 1, 2)
     # Each tensor corresponds to a datapoint which contains all the reviews of that user who is a part of that datapoint
-    user_reviews = [torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length))]
+    user_reviews = [torch.randint(low=0, high=3, size=(config.max_reviews, config.max_review_length)), torch.randint(low=0, high=3, size=(config.max_reviews, config.max_review_length))]
 
     # List of Tensors: Each Tensor corresponding to an item containing the IDs of the users who have written a review on it 
     # Each tensor corresponds to an element of item reviews which contains all the user IDS that wrote each review in that element 
-    review_user_ids = [torch.randint(low=0, high=2, size=(number_of_reviews,1)), torch.randint(low=0, high=2, size=(number_of_reviews,1))]
+    review_user_ids = [torch.randint(low=0, high=2, size=(config.max_reviews, 1)), torch.randint(low=0, high=2, size=(config.max_reviews, 1))]
     
     # List of Tensors: Each Tensor corresponding to a user containing the IDs of the items for which they have written a review 
     # Each tensor corresponds to an element of user reviws which contains all the item IDS for which each review was written in that element 
-    review_item_ids = [torch.randint(low=0, high=3, size=(number_of_reviews, 1)), torch.randint(low=0, high=3, size=(number_of_reviews, 1))]
+    review_item_ids = [torch.randint(low=0, high=3, size=(config.max_reviews, 1)), torch.randint(low=0, high=3, size=(config.max_reviews, 1))]
 
     # User and Item ID pairs for which you want to predict ratings
     target_user_id = [torch.randint(low=0, high=2, size=(1,1)), torch.randint(low=0, high=2, size=(1,1))]
@@ -274,16 +281,36 @@ if __name__ == "__main__":
     # Size of Item and User embeddings = 100
     # Hidden size for LSTM = 50
     # Latent size = 70
-    model = KGRAMS(embedding_size = 100, vocab_size = 3, out_channels = 100, filter_size = 3, num_of_user_item_pairs= num_of_user_item_pairs, review_length = max_review_length, user_id_size = 2, item_id_size = 3, embedding_id_size = 100, hidden_size = 50, latent_size=70)
-
-    encoded_reviews = model(user_ids = target_user_id, # User IDs for which you want to predict ratings
+    narre = NARRE(embedding_size = config.word_embedding_size, vocab_size = config.vocab_size, out_channels = config.num_filters, filter_size = config.filter_size, review_length = config.max_review_length, user_id_size = config.num_users, item_id_size = config.num_items, id_embedding_size = config.id_embedding_size, hidden_size = config.hidden_size, latent_size = config.latent_size)
+    mrg = MRG(word_embedding_size = config.word_embedding_size, id_embedding_size = config.id_embedding_size, hidden_dim = config.hidden_size, latent_size = config.latent_size, vocab_size = config.vocab_size)
+    predicted_ratings, user_features, item_features, user_item_features = narre(user_ids = target_user_id, # User IDs for which you want to predict ratings
           user_reviews = user_reviews, # User reviews from the training set
           user_ids_of_reviews = review_user_ids, # User IDs who have written a review for each item
           item_ids = target_item_id, # Item IDs for which you want to predict ratings
           item_reviews = item_reviews, # Item reviews from the training set
           item_ids_of_reviews = review_item_ids, # Item IDs for which a user has written a review
           target_ratings = target_ratings, # Ground truth ratings
-          target_reviews = target_reviews) # Ground truth reviews
+          target_reviews = target_reviews,
+          num_of_user_item_pairs = num_of_user_item_pairs) # Ground truth reviews
 
+    user_ids_stack = torch.stack(target_user_id, dim=0).squeeze().type(torch.LongTensor)
+    item_ids_stack = torch.stack(target_item_id, dim=0).squeeze().type(torch.LongTensor)
+
+    # Updated embeddings
+    user_embeddings = narre.user_net.entity_id_embeddings(user_ids_stack)
+    item_embeddings = narre.item_net.entity_id_embeddings(item_ids_stack)
+        
+    # Combining the updated ID embeddings with the already calculated latent features
+    user_features_updated = torch.cat((user_embeddings, user_features[:, config.id_embedding_size:]), dim = 1)
+    item_features_updated = torch.cat((item_embeddings, item_features[:, config.id_embedding_size:]), dim = 1)
+    
+    # Review generation
+    raw_probabilities = mrg(user_features_updated, item_features_updated, target_reviews, num_of_user_item_pairs)
+    raw_probabilities = raw_probabilities.view(raw_probabilities.shape[0] * raw_probabilities.shape[1], -1)
+    target_reviews = torch.stack(target_reviews, dim = 0)
+    target_reviews = target_reviews.view(target_reviews.shape[0] * target_reviews.shape[2])
+
+    converted_prob = view_generated_reviews(raw_probabilities)
+    print(converted_prob)
     # print(encoded_reviews.shape)
     # print(model)
