@@ -1,17 +1,66 @@
 import torch
 import torch.nn as nn
 
-class KGRAMS(nn.Module):
-    def __init__(self, embedding_size, vocab_size, out_channels, filter_size, num_of_user_item_pairs, review_length, user_id_size, item_id_size, embedding_id_size, hidden_size, latent_size):
-        super(KGRAMS, self).__init__()
+class MRG(nn.Module):
+
+    # Init function
+    def __init__(self, word_embedding_size = 300, id_embedding_size = 100, hidden_dim = 128, latent_size = 70, vocab_size = 3, num_of_lstm_layers = 1, num_directions = 1):
+        super(MRG, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.vocab_size = vocab_size
+        self.num_of_lstm_layers = num_of_lstm_layers
+        self.num_directions = num_directions
+        self.id_embedding_size = id_embedding_size
+        self.lstm_hidden_size = hidden_dim * num_directions * num_of_lstm_layers
+        self.linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
+        self.lstm = nn.LSTM(input_size = word_embedding_size, hidden_size = self.lstm_hidden_size, batch_first = True)
+        # MRG linear layers for h0 and c0 + activation function
+        self.linear_c0 = nn.Linear(2 * (id_embedding_size + latent_size), self.lstm_hidden_size)
+        self.linear_h0 = nn.Linear(2 * (id_embedding_size + latent_size), self.lstm_hidden_size)
+        self.tanh = nn.Tanh()
+
+    # Function to initialize the hidden and cell states
+    def initialize_lstm(self, init_values, num_of_user_item_pairs):
+        c0 = self.tanh(self.linear_c0(init_values)).view(self.num_of_lstm_layers * self.num_directions, num_of_user_item_pairs, -1)
+        h0 = self.tanh(self.linear_h0(init_values)).view(self.num_of_lstm_layers * self.num_directions, num_of_user_item_pairs, -1)
+        return (h0, c0)
+        
+    # Forward function
+    def forward(self, user_features, item_features, input_reviews, num_of_user_item_pairs):
+
+        # Obtaining user_id_embeddings and the item_id_embeddings
+        user_id_embeddings = user_features[0 : self.id_embedding_size]
+        item_id_embeddings = item_features[0 : self.id_embedding_size]
+
+        # Creating a concatenation of the user and ID embeddings
+        user_item_id_concatenation = torch.cat([user_id_embeddings, item_id_embeddings], dim = 1)
+        
+        # Initializing the hidden and cell states
+        h0, c0 = self.initialize_lstm(user_item_id_concatenation, num_of_user_item_pairs)
+
+        # Passing the input reviews through the LSTM
+        all_hidden_state_outputs, (h0, c0) = self.lstm(input_reviews, (h0, c0))
+        
+        # Obtaining pre-softmax probabilities over the vocabulary
+        raw_probabilities = self.linear_layer(all_hidden_state_outputs) 
+        
+        return raw_probabilities
+        
+
+class NARRE(nn.Module):
+    def __init__(self, embedding_size, vocab_size, out_channels, filter_size, review_length, user_id_size, item_id_size, id_embedding_size, hidden_size, latent_size):
+        super(NARRE, self).__init__()
         self.review_length = review_length # Max review length
         self.word_embedding_size = embedding_size # Dimensionality of word embeddings
-        self.num_of_user_item_pairs = num_of_user_item_pairs # No of users changed to number of user item pairs
         # Word Embedding matrix of shape Vocab_Size X Embedding_size
         self.word_embeddings = nn.Embedding(num_embeddings=vocab_size,
                                             embedding_dim=embedding_size)
+        # Creating a variable for storing the embedding id size
+        self.id_embedding_size = id_embedding_size
+        self.latent_size = latent_size
+
         # An instance of the User Network
-        self.user_net = EntityNet(embedding_id_size=embedding_id_size, # Size of user ID embeddings
+        self.user_net = EntityNet(embedding_id_size=id_embedding_size, # Size of user ID embeddings
                                   out_channels=out_channels, # Number of filters
                                   filter_size=filter_size, # Size of filters
                                   review_length=review_length, # Max review length
@@ -19,8 +68,9 @@ class KGRAMS(nn.Module):
                                   id_size=user_id_size, # Number of users
                                   hidden_size=hidden_size, # Size of hidden LSTM units
                                   latent_size=latent_size) # Latent feature size
+        
         # An instance of the Item Network
-        self.item_net = EntityNet(embedding_id_size=embedding_id_size, # Size of Item ID embeddings
+        self.item_net = EntityNet(embedding_id_size=id_embedding_size, # Size of Item ID embeddings
                                   out_channels=out_channels, # Number of filters
                                   filter_size=filter_size, # Size of filters
                                   review_length=review_length, # Max review length
@@ -28,29 +78,20 @@ class KGRAMS(nn.Module):
                                   id_size=item_id_size, # Numbers of items
                                   hidden_size=hidden_size, # Size of hidden LSTM units
                                   latent_size=latent_size) # Latent feature size
+
+    def initialize_rating_prediction_layer(self, num_of_user_item_pairs):
         
         # Parameters of the Rating prediction layer (embedding_id_size + latent_size = n)
-        self.W_1 = nn.Parameter(torch.rand(1,embedding_id_size+latent_size)) # 1 X (Embedding_id_size + latent_size)
-        self.b_u = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X Number of users
-        self.b_i = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X Number of users
-        self.mu = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X numbers of users
+        self.W_1 = nn.Parameter(torch.rand(1, self.id_embedding_size + self.latent_size)) # 1 X (Embedding_id_size + latent_size)
+        self.b_u = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X Number of user item pairs
+        self.b_i = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X Number of user item pairs
+        self.mu = nn.Parameter(torch.rand(num_of_user_item_pairs)) # 1 X numbers of user item pairs
+        
+    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_ratings, target_reviews, num_of_user_item_pairs):
+        
+        # Initializing the parameters of the rating prediction layer
+        self.initialize_rating_prediction_layer(num_of_user_item_pairs)
 
-        # Rating component Loss - Mean Square Error loss
-        self.rating_loss = nn.MSELoss()
-
-        # Review generation part
-        # To initialize state of lstm with the item_id+user_id embeddings
-        # self.linear_c0 = nn.Linear((2 * (embedding_id_size + latent_size)), hidden_size) # hidden size should be number of hidden dimensions of the LSTM state
-        # self.linear_h0 = nn.Linear((2 * (embedding_id_size + latent_size)), hidden_size)  # hidden size should be number of hidden dimensions of the LSTM state
-        self.linear_c0 = nn.Linear(2 * (embedding_id_size + latent_size), hidden_size) # hidden size should be number of hidden dimensions of the LSTM state
-        self.linear_h0 = nn.Linear(2 * (embedding_id_size + latent_size), hidden_size)  # hidden size should be number of hidden dimensions of the LSTM state
-        self.tanh = nn.Tanh()
-        #lstm
-        self.num_of_lstm_layers = 1
-        # Batch first : https://discuss.pytorch.org/t/could-someone-explain-batch-first-true-in-lstm/15402
-        self.encoder = nn.LSTM(input_size = embedding_size, hidden_size = hidden_size, batch_first=True)
-
-    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_ratings, target_reviews):
         # Get the overall user latent representation 
         users_features =  self.get_entity_features(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings, self.user_net)
         # Get the overall item latent representation
@@ -64,12 +105,25 @@ class KGRAMS(nn.Module):
         predicted_rating = torch.matmul(self.W_1, user_item_features.t()) + self.b_u + self.b_i + self.mu
         # Sentiment features????
         # Calculate loss
-        stacked_target_rating = torch.stack(target_ratings, dim=0).view(1, -1)
-        rating_pred_loss = self.rating_loss(predicted_rating, stacked_target_rating).squeeze()
-        rating_pred_loss.backward()
-        #LSTM part
-        encoded_reviews = self.encode_reviews(users_features, items_features, torch.stack(target_reviews, dim=0))
-        return encoded_reviews
+        # stacked_target_rating = torch.stack(target_ratings, dim=0).view(1, -1)
+        # rating_pred_loss = self.rating_loss(predicted_rating, stacked_target_rating).squeeze()
+        # rating_pred_loss.backward()
+        # LSTM Encoder part
+        # user_ids_stack = torch.stack(user_ids, dim=0).squeeze()
+        # user_ids_stack = user_ids_stack.type(torch.LongTensor)
+        # item_ids_stack = torch.stack(item_ids, dim=0).squeeze()
+        # item_ids_stack = item_ids_stack.type(torch.LongTensor)
+        # user_embeddings = self.user_net.entity_id_embeddings(user_ids_stack)   #Updated embeddings
+        # item_embeddings = self.item_net.entity_id_embeddings(item_ids_stack)
+        # user_features_updated = torch.cat((user_embeddings, users_features[:, self.embedding_id_size:]), dim = 1)
+        # item_features_updated = torch.cat((item_embeddings, items_features[:, self.embedding_id_size:]), dim = 1)
+        # encoded_reviews, probabilities = self.encode_reviews(user_features_updated, item_features_updated, user_item_features, torch.stack(target_reviews, dim=0))
+        # # LSTM Decoder part
+        # probabilities = probabilities.view(probabilities.shape[0] * probabilities.shape[1], -1) # 160 X vocab_size
+        
+        # encoded_reviews = self.encode_reviews(users_features, items_features, torch.stack(target_reviews, dim=0))
+        
+        return predicted_rating, users_features, items_features, user_item_features
 
     def get_entity_features(self, entity_ids, entity_reviews, entity_score_ids, word_embeddings, entity_network):
         entity_features = []
@@ -81,29 +135,10 @@ class KGRAMS(nn.Module):
         # Stacking the learnt features
         # print(entity_features.shape)
         stacked_entity_feats = torch.stack(entity_features, dim = 0) # [2, 1, 170]
-        stacked_entity_feats = stacked_entity_feats.view(len(entity_ids), -1) # [2, 170]
+        stacked_entity_feats = stacked_entity_feats.view(len(entity_reviews), -1) # [2, 170]
         # print(stacked_entity_feats.shape)
         # stacked_entity_feats = torch.stack(entity_features, dim=0).view(len(entity_reviews), -1)
         return stacked_entity_feats
-
-    def init_lstm(self, init_values):
-        c0 = self.tanh(self.linear_c0(init_values)).view(self.num_of_lstm_layers * 1, self.num_of_user_item_pairs, -1)
-        h0 = self.tanh(self.linear_h0(init_values)).view(self.num_of_lstm_layers * 1, self.num_of_user_item_pairs, -1)
-        return (h0, c0)
-
-    def encode_reviews(self, users_features, items_features, reviews):
-        z1 = torch.cat([users_features, items_features], dim=1)
-        (h0, c0) = self.init_lstm(z1)
-        reviews = reviews.type(torch.LongTensor)
-        review_embeddings = self.word_embeddings(reviews).squeeze()
-        # lstm: https://pytorch.org/docs/stable/nn.html
-        lstm_output, (ht, ct) = self.encoder(review_embeddings, (h0, c0))
-        return lstm_output
-        #   concat each word_embedding of the review with the sentiment_feat .. don't need it?
-        #   lstm output
-        #   calculate lstm loss
-        #   backpropagate loss - update item and user embedding
-
 
 class EntityNet(nn.Module):
     def __init__(self, embedding_id_size, out_channels, filter_size, review_length, score_size, id_size, hidden_size, latent_size):
@@ -199,20 +234,21 @@ if __name__ == "__main__":
     max_review_length = 80
 
     # List of Tensors : Each tensor (corresponding to an item) is of shape number_of_reviews X max_review_length
+    # Each tensor corresponds to a datapoint which contains all the reviews on that item which is a part of that datapoint
     # Each row is a review consisting of word indices (0, 1, 2)
-    item_reviews = [torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), \
-        torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length))]
+    item_reviews = [torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length))]
 
     # List of Tensors : Each tensor (corresponding to a user) is of shape number_of_reviews X max_review_length 
     # Each row is a review consisting of word indices (0, 1, 2)
+    # Each tensor corresponds to a datapoint which contains all the reviews of that user who is a part of that datapoint
     user_reviews = [torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length)), torch.randint(low=0, high=3, size=(number_of_reviews, max_review_length))]
 
     # List of Tensors: Each Tensor corresponding to an item containing the IDs of the users who have written a review on it 
-    # [[user ids for item 1], [user ids for item 2], ...]
+    # Each tensor corresponds to an element of item reviews which contains all the user IDS that wrote each review in that element 
     review_user_ids = [torch.randint(low=0, high=2, size=(number_of_reviews,1)), torch.randint(low=0, high=2, size=(number_of_reviews,1))]
     
     # List of Tensors: Each Tensor corresponding to a user containing the IDs of the items for which they have written a review 
-    # [[item ids for user 1], [item ids for user 2]]
+    # Each tensor corresponds to an element of user reviws which contains all the item IDS for which each review was written in that element 
     review_item_ids = [torch.randint(low=0, high=3, size=(number_of_reviews, 1)), torch.randint(low=0, high=3, size=(number_of_reviews, 1))]
 
     # User and Item ID pairs for which you want to predict ratings
@@ -224,7 +260,7 @@ if __name__ == "__main__":
     target_reviews = [torch.randint(low=0, high=3, size=(1,80)), torch.randint(low=0, high=3, size=(1,80))]
 
     # Total number of users
-    num_of_user_item_pairs = len(target_user_id)
+    num_of_user_item_pairs = len(user_reviews)
 
     # Instantiating an object of the KGRAMS class
     # Embedding size = 100
@@ -249,5 +285,5 @@ if __name__ == "__main__":
           target_ratings = target_ratings, # Ground truth ratings
           target_reviews = target_reviews) # Ground truth reviews
 
-    print(encoded_reviews.shape)
+    # print(encoded_reviews.shape)
     # print(model)
