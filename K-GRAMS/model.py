@@ -1,5 +1,18 @@
 import torch
 import torch.nn as nn
+PAD_INDEX = 0
+PAD_WORD = '<PAD>'
+
+START_INDEX = 1
+START_WORD = '<STR>'
+
+END_INDEX = 2
+END_WORD = '<END>'
+
+UNK_INDEX = 3
+UNK_WORD = '<UNK>'
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class KGRAMS(nn.Module):
     def __init__(self, word_embedding_size, vocab_size, out_channels, filter_size, batch_size, review_length, user_id_embedding_idx,
@@ -43,13 +56,29 @@ class KGRAMS(nn.Module):
         self.lstm_linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
         self.tanh = nn.Tanh()
 
-    def initialize_lstm(self, init_values):
-        c0 = self.tanh(self.linear_c0(init_values)).view(self.num_of_lstm_layers * self.num_directions, self.batch_size, -1)
-        h0 = self.tanh(self.linear_h0(init_values)).view(self.num_of_lstm_layers * self.num_directions, self.batch_size, -1)
+    def initialize_lstm(self, init_values, batch_size):
+        c0 = self.tanh(self.linear_c0(init_values)).view(self.num_of_lstm_layers * self.num_directions, batch_size, -1)
+        h0 = self.tanh(self.linear_h0(init_values)).view(self.num_of_lstm_layers * self.num_directions, batch_size, -1)
         return (h0, c0)
 
+    def generate_sequence(self, h0, c0, sentiment_feat):
+        review_generated = []
+        input = torch.LongTensor(self.batch_size, 1).fill_(START_INDEX).to(device)
+        input_embedding = self.word_embeddings(input)
+        sentiment_feat = sentiment_feat.view(self.batch_size, input_embedding.size(1), -1)#sentiment_feat.repeat(input_embedding.size(1), 1).view(self.batch_size, input_embedding.size(1), -1)
+        input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2)
+        for i in range(self.review_length):
+            hidden_ouput, (h0, c0) = self.lstm(input_embedding, (h0, c0))
+            out_probability = self.lstm_linear_layer(hidden_ouput)
+            word_idx = torch.argmax(out_probability, dim=2)
+            input_embedding = self.word_embeddings(word_idx)#.view(self.batch_size, 1, -1)
+            input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2)
+            review_generated.append(word_idx.detach().t())
+        review_generated = torch.stack(review_generated, dim=0)
+        return review_generated.view(self.batch_size, -1)
 
-    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_reviews_x):
+
+    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_reviews_x, mode = "train"):
         users_features =  self.user_net(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings)
         items_features =  self.item_net(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings)
         user_item_features = users_features * items_features  #h_0 = q_u + X_u * p_i + Y_i
@@ -58,13 +87,18 @@ class KGRAMS(nn.Module):
         user_id_embeddings = self.user_net.entity_id_embeddings(user_ids)
         item_id_embeddings = self.item_net.entity_id_embeddings(item_ids)
         user_item_id_concatenation = torch.cat([user_id_embeddings, item_id_embeddings], dim=1)
-        h0, c0 = self.initialize_lstm(user_item_id_concatenation)
-        review_embedding = self.word_embeddings(target_reviews_x)
-        sentiment_feats =  user_item_features.repeat(review_embedding.size(1), 1).view(self.batch_size, review_embedding.size(1), -1)
-        lstm_input = torch.cat([review_embedding,sentiment_feats],dim=2)
-        hidden_ouput, (h0, c0) = self.lstm(lstm_input, (h0, c0))
-        out_probability = self.lstm_linear_layer(hidden_ouput)
-        return predicted_rating, out_probability
+        h0, c0 = self.initialize_lstm(user_item_id_concatenation, self.batch_size)
+        if mode is "train":
+            review_embedding = self.word_embeddings(target_reviews_x)
+            sentiment_feats =  user_item_features.repeat(review_embedding.size(1), 1).view(self.batch_size, review_embedding.size(1), -1)
+            lstm_input = torch.cat([review_embedding,sentiment_feats],dim=2)
+            hidden_ouput, (h0, c0) = self.lstm(lstm_input, (h0, c0))
+            out_probability = self.lstm_linear_layer(hidden_ouput)
+            return predicted_rating, out_probability
+        else:
+            seq = self.generate_sequence(h0, c0, user_item_features)
+            return predicted_rating, seq
+
 
 
 
@@ -103,6 +137,7 @@ class EntityNet(nn.Module):
         score_embedding = self.entity_score_embeddings(review_ids).view(batch_size, -1, num_of_reviews) #transposed for matmul
         # review_attentions
         review_feats = review_feats.view(batch_size, -1, num_of_reviews)
+        #Todo: for different embedding sizes
         review_attentions = torch.matmul(self.h.view(1, -1), self.relu(torch.matmul(self.W_O, review_feats) + torch.matmul(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
         review_attentions = self.softmax(review_attentions)  #batch_size X num_of_reviews
         reviews_importance = torch.matmul(review_attentions, review_feats.view(batch_size, num_of_reviews, -1) )
