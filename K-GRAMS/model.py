@@ -2,6 +2,27 @@
 import torch
 import torch.nn as nn
 import config
+from pyrouge import Rouge155
+
+def obtain_pyrouge_scores():
+
+    # Creating an instance of the rouge object 
+    r = Rouge155()
+
+    # Setting the directory paths
+    r.system_dir = 'decoded'
+    r.model_dir = 'reference'
+
+    # Defining the file patterns in the directories
+    r.system_filename_pattern = '(\d+)_decoded.txt'
+    r.model_filename_pattern = '#ID#_reference.txt'
+
+    # Obtain the metrics
+    output = r.convert_and_evaluate()
+    output_dict = r.output_to_dict(output)
+    
+    # Returning the output dictionary
+    return output_dict
 
 def view_generated_reviews(raw_probabilities):
 
