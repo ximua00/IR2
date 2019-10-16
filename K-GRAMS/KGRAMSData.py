@@ -155,11 +155,11 @@ class KGRAMSTrainData(KGRAMSData):
 class KGRAMSEvalData(KGRAMSData):
     def __init__(self, data_dir, seq_length, num_reviews_per_user = 10, mode = "validate"):
         super(KGRAMSEvalData, self).__init__(data_dir, seq_length, num_reviews_per_user)
-        self.eval_dataset = self.get_mode_data(mode)
-        self.num_of_reviews = len(self.eval_dataset)
+        self.dataset = self.get_mode_data(mode)
+        self.num_of_reviews = len(self.dataset)
+        self.eval_data_dict, self.eval_user_count, self.eval_item_count = self.preprocess_data(self.dataset, seq_length)
         self.target_user_ids, self.target_item_ids, self.target_ratings, self.target_reviews, self.user_reviews, \
         self.item_reviews, self.review_user_ids, self.review_item_ids, self.target_reviews_x, self.target_reviews_y = self.load_data()
-
     def get_mode_data(self, mode):
         if mode is "validate":
             data_set = self.val_data
@@ -188,7 +188,7 @@ class KGRAMSEvalData(KGRAMSData):
 
 
     def load_data(self):
-        user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_dataset)
+        user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_data_dict)
         return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data)
 
     def __getitem__(self, idx):

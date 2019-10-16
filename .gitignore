@@ -30,3 +30,6 @@ Temporary Items
 *.iml
 *.json
 *.gz
+*.text
+*.txt
+*.pt
