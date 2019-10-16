@@ -45,7 +45,6 @@ class BaseData:
         with open(self.data_dir, 'r') as jsonfile:
             for reviewID, line in enumerate((jsonfile)):
                 line_data = json.loads(line)
-
                 if line_data["reviewerID"] in self.user_idx.keys():
                     data[reviewID]["userID"] = self.user_idx[line_data["reviewerID"]]
                 else:
@@ -63,7 +62,7 @@ class BaseData:
                 data[reviewID]["helpful"] = line_data["helpful"]
                 data[reviewID]["rating"] = line_data["overall"]
                 data[reviewID]["reviewText"] = line_data["reviewText"]
-
+                # file_name.write(str(reviewID) +"  " + line_data["reviewText"]+ "\n")
                 line_data["reviewText"] = line_data["reviewText"].lower()
                 text_split = re.split("[ .,;()&!]+", line_data["reviewText"])
                 [self.text_data.append(word) for word in text_split]
@@ -76,7 +75,7 @@ class BaseData:
         idx2word = {PAD_INDEX:PAD_WORD, START_INDEX:START_WORD, END_INDEX:END_WORD, UNK_INDEX:UNK_WORD}
 
         word_counter = Counter(self.text_data)
-
+        vocab_file = open("vocab.txt", "w")
         for review_id in self.data.keys():
             review_sentence_idxs = [START_INDEX]
             for word in self.data[review_id]["reviewSplitText"]:
@@ -86,11 +85,16 @@ class BaseData:
                         self.index_counter += 1
                         word2idx[word] = self.index_counter
                         idx2word[self.index_counter] = word
-                    # Add word idx to review
-                    review_sentence_idxs.append(self.index_counter)
+                        vocab_file.write(str(self.index_counter) + " - " + word + "\n")
+                        # Add word idx to review
+                        review_sentence_idxs.append(self.index_counter)
+                    else:
+                        review_sentence_idxs.append((word2idx[word]))
                 else:
                     review_sentence_idxs.append(UNK_INDEX)
-            # print(review_sentence_idxs)
+
+            # print((self.data[review_id]["reviewSplitText"]))
+            # print((review_sentence_idxs))
             review_sentence_idxs.append(END_INDEX)
             self.data[review_id]['review'] = review_sentence_idxs
         return word2idx, idx2word
