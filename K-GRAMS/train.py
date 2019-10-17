@@ -172,7 +172,7 @@ def train(config):
 if __name__ == "__main__":
     config = argparse.ArgumentParser()
     config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
-    config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Digital_Music_5.json", help='Dataset')
+    config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Musical_Instruments_5.json", help='Dataset')
     config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
     config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
     config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')
