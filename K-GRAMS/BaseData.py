@@ -164,7 +164,7 @@ class BaseData:
 #
 if __name__ == "__main__":
     root_dir = "/media/sohi/New Volume/UvA_Year2/git_ir2/IR2/data"
-    data_set_name = "Digital_Music_5.json"
+    data_set_name = "Musical_Instruments_5.json"
     data_path = root_dir+data_set_name
     print("Processing Data - ", data_path)
     base_data = BaseData(data_path)
