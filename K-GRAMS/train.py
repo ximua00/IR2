@@ -49,7 +49,7 @@ def test(config, model, dataset):
         break
 
 
-def validate(config, model, vocab_size, data_generator):
+def validate(config, model, vocab_size, data_generator, dataset_object):
     mse_loss = nn.MSELoss()
     ce_loss = nn.CrossEntropyLoss()
     rating_batch_loss = []
@@ -72,7 +72,8 @@ def validate(config, model, vocab_size, data_generator):
                                                               item_ids=target_item_ids,
                                                               item_reviews=item_reviews,
                                                               item_ids_of_reviews=review_item_ids,
-                                                              target_reviews_x=target_reviews_x)
+                                                              target_reviews_x=target_reviews_x,
+                                                              dataset_object = dataset_object) # come to model.py
         rating_pred_loss = mse_loss(predicted_rating.detach().squeeze(), target_ratings.float())
         review_probabilities = review_probabilities.detach().view(-1, vocab_size)
         review_gen_loss = ce_loss(review_probabilities.detach(), target_reviews_y.view(-1))
@@ -82,9 +83,10 @@ def validate(config, model, vocab_size, data_generator):
 
 def train(config):
     data_path = config.root_dir + config.data_set_name
-    print("Processing Data - ", data_path)
-    dataset_train = KGRAMSTrainData(data_path, config.review_length)
-    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate")
+    print("Processing Data - ", data_path) # the same data path is being passed
+    dataset_train = KGRAMSTrainData(data_path, config.review_length) # but kgrams inherits from basedata
+    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate") # gonna pass this
+    # She's creating two separate objects here ... I see...come to validate function..Yes I get it, Rishav?
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
@@ -105,7 +107,7 @@ def train(config):
                         num_of_lstm_layers = 1,
                         num_directions = 1,
                         lstm_hidden_dim = 50)
-    kgrams_model = kgrams_model.to(device)
+    kgrams_model = kgrams_model.to(device) 
 
     data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
     data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
@@ -138,7 +140,8 @@ def train(config):
                                                               item_ids=target_item_ids,
                                                               item_reviews=item_reviews,
                                                               item_ids_of_reviews=review_item_ids,
-                                                              target_reviews_x = target_reviews_x)
+                                                              target_reviews_x = target_reviews_x,
+                                                              dataset_object = dataset_train) # over here...cool ?? yes
             rating_pred_loss = mse_loss(predicted_rating.squeeze(), target_ratings.float())
             review_probabilities = review_probabilities.view(-1, vocab_size)
             review_gen_loss = crossentr_loss(review_probabilities, target_reviews_y.view(-1))
@@ -148,13 +151,15 @@ def train(config):
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
+            break
         if (epoch % config.eval_freq == 0):
             PATH = "models/model_"+str(epoch)+".pt"
             torch.save(kgrams_model.state_dict(), PATH)
-            avg_rating_loss, avg_rev_loss = validate(config, kgrams_model, dataset_val.vocab_size, data_generator_val)
+            avg_rating_loss, avg_rev_loss = validate(config, kgrams_model, dataset_val.vocab_size, data_generator_val, dataset_val)
             print("-------------EPOCH:",epoch,"----------------------")
             print("TRAIN : Rating Loss - ", np.mean(rating_loss), "LSTM loss - ", np.mean(review_loss))
             print("VALIDATION:   Rating Loss - ", avg_rating_loss, "LSTM loss - ", avg_rev_loss)
+            sys.exit(1)
             # print("--------------Generating review--------------------")
             # test(config, kgrams_model, dataset_test)
             # print("---------------------------------------------------")
@@ -173,7 +178,7 @@ if __name__ == "__main__":
     config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')
     config.add_argument('-mlr', '--mrg_learning_rate', required=False, type=float, default=0.0003, help='MRG learning rate')
     config.add_argument('-epochs', '--epochs', required=False, type=int, default=2000, help='epochs')
-    config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default=100, help='Word embedding size')
+    config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default=1024, help='Word embedding size')
     config.add_argument('-iembed', '--id_embedding_size', required=False, type=int, default=100, help='Item/User embedding size')
     config.add_argument('-efreq', '--eval_freq', required=False, type=int, default=100,help='Evaluation Frequency')
     config = config.parse_args()

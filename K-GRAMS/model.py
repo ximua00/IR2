@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+from allennlp.modules.elmo import Elmo, batch_to_ids
+import sys
+
 PAD_INDEX = 0
 PAD_WORD = '<PAD>'
 
@@ -11,6 +14,11 @@ END_WORD = '<END>'
 
 UNK_INDEX = 3
 UNK_WORD = '<UNK>'
+
+# Elmo Parameters
+elmo_options = "https://allennlp.s3.amazonaws.com/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json" 
+elmo_weights = "https://allennlp.s3.amazonaws.com/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+elmo = Elmo(elmo_options, elmo_weights, 2, dropout = 0)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -45,12 +53,12 @@ class KGRAMS(nn.Module):
         self.b_u = nn.Parameter(torch.rand(batch_size))
         self.b_i = nn.Parameter(torch.rand(batch_size))
         self.mu = nn.Parameter(torch.rand(batch_size))
-        #Review generaion lstm
+        #Review generation lstm
         self.num_of_lstm_layers = num_of_lstm_layers
         self.num_directions = num_directions
         self.lstm_hidden_size = lstm_hidden_dim * num_directions * num_of_lstm_layers
         self.linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
-        self.lstm = nn.LSTM(input_size=word_embedding_size+(id_embedding_size+latent_size), hidden_size=self.lstm_hidden_size, batch_first=True)
+        self.lstm = nn.LSTM(input_size=1024+(id_embedding_size+latent_size), hidden_size=self.lstm_hidden_size, batch_first=True)
         self.linear_c0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
         self.linear_h0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
         self.lstm_linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
@@ -64,23 +72,34 @@ class KGRAMS(nn.Module):
     def generate_sequence(self, h0, c0, sentiment_feat):
         review_generated = []
         input = torch.LongTensor(self.batch_size, 1).fill_(START_INDEX).to(device)
-        input_embedding = self.word_embeddings(input)
+        input = input.view(input.shape[0], 1, 1)
+        # input_embedding = self.word_embeddings(input)
+        words_from_ids = convert_batch_indices_to_word(input, self.dataset_object)
+        character_ids = batch_to_ids(words_from_ids)
+        elmo_embeddings_dict = elmo(character_ids)
+        input_embedding = elmo_embeddings_dict['elmo_representations'][0]
+
         sentiment_feat = sentiment_feat.view(self.batch_size, input_embedding.size(1), -1)#sentiment_feat.repeat(input_embedding.size(1), 1).view(self.batch_size, input_embedding.size(1), -1)
         input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2)
         for i in range(self.review_length):
             hidden_ouput, (h0, c0) = self.lstm(input_embedding, (h0, c0))
             out_probability = self.lstm_linear_layer(hidden_ouput)
             word_idx = torch.argmax(out_probability, dim=2)
-            input_embedding = self.word_embeddings(word_idx)#.view(self.batch_size, 1, -1)
+            # input_embedding = self.word_embeddings(word_idx)#.view(self.batch_size, 1, -1)
+            words_from_ids = convert_batch_indices_to_word(word_idx, self.dataset_object)
+            character_ids = batch_to_ids(words_from_ids)
+            elmo_embeddings_dict = elmo(character_ids)
+            input_embedding = elmo_embeddings_dict['elmo_representations'][0]
             input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2)
             review_generated.append(word_idx.detach().t())
         review_generated = torch.stack(review_generated, dim=0)
         return review_generated.view(self.batch_size, -1)
 
 
-    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_reviews_x, mode = "train"):
-        users_features =  self.user_net(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings)
-        items_features =  self.item_net(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings)
+    def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_reviews_x, dataset_object, mode = "train"):
+        self.dataset_object = dataset_object
+        users_features =  self.user_net(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings, dataset_object)
+        items_features =  self.item_net(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings, dataset_object)
         user_item_features = users_features * items_features  #h_0 = q_u + X_u * p_i + Y_i
         predicted_rating = torch.matmul(self.W_1, user_item_features.t()) + self.b_u + self.b_i + self.mu
         #review generation
@@ -89,7 +108,12 @@ class KGRAMS(nn.Module):
         user_item_id_concatenation = torch.cat([user_id_embeddings, item_id_embeddings], dim=1)
         h0, c0 = self.initialize_lstm(user_item_id_concatenation, self.batch_size)
         if mode is "train":
-            review_embedding = self.word_embeddings(target_reviews_x)
+
+            # review_embedding = self.word_embeddings(target_reviews_x)
+            words_from_ids = convert_batch_indices_to_word(target_reviews_x, self.dataset_object)
+            character_ids = batch_to_ids(words_from_ids)
+            elmo_embeddings_dict = elmo(character_ids)
+            review_embedding = elmo_embeddings_dict['elmo_representations'][0]
             sentiment_feats =  user_item_features.repeat(review_embedding.size(1), 1).view(self.batch_size, review_embedding.size(1), -1)
             lstm_input = torch.cat([review_embedding,sentiment_feats],dim=2)
             hidden_ouput, (h0, c0) = self.lstm(lstm_input, (h0, c0))
@@ -98,8 +122,6 @@ class KGRAMS(nn.Module):
         else:
             seq = self.generate_sequence(h0, c0, user_item_features)
             return predicted_rating, seq
-
-
 
 
 class EntityNet(nn.Module):
@@ -124,19 +146,32 @@ class EntityNet(nn.Module):
 
         self.softmax = nn.Softmax(dim=1)
         self.linear = nn.Linear(out_channels, latent_size)
+        
 
-    def forward(self, target_id, reviews, review_ids, word_embeddings):
+    def forward(self, target_id, reviews, review_ids, word_embeddings, dataset_object):
         batch_size = reviews.size(0)
         num_of_reviews = reviews.size(1)
         review_length = reviews.size(2)
-        rev_embeddings = word_embeddings(reviews)  # o/p size: batch_size X num_of_reviews X review_length X embedding_size
-        input_embeddings = rev_embeddings.view(rev_embeddings.size(0) * rev_embeddings.size(1), 1, rev_embeddings.size(2), rev_embeddings.size(3))
+        # ELMO part
+        print(reviews.shape) # 5 x 9 x 82
+        review_words = convert_batch_indices_to_word(reviews, dataset_object)
+        # print(review_words)
+        character_ids = batch_to_ids(review_words)
+        elmo_embeddings_dict = elmo(character_ids)
+        rev_embeddings = elmo_embeddings_dict['elmo_representations'][0]
+        print(rev_embeddings.shape) # 45 x 82 x 1024
+        input_embeddings = rev_embeddings.view(rev_embeddings.size(0), 1, rev_embeddings.size(1), rev_embeddings.size(2))
+        # rev_embeddings = word_embeddings(reviews)  # o/p size: batch_size X num_of_reviews X review_length X embedding_size
+        # input_embeddings = rev_embeddings.view(rev_embeddings.size(0) * rev_embeddings.size(1), 1, rev_embeddings.size(2), rev_embeddings.size(3))
         x = self.conv2d(input_embeddings)  #o/p size:  num_of_reviews * out_channels * filter_out_size1 * filter_out_size2
+        print("Size of x after conv2d", x.shape) # 45 x 100 X 80 X 925
         x = self.relu(x)
         review_feats = self.max_pool(x).view(batch_size, num_of_reviews, -1) #4D : [batch_size * num_of_reviews] * out_channels * 1 * 1
+        print("After max pool", review_feats.shape)
         score_embedding = self.entity_score_embeddings(review_ids).view(batch_size, -1, num_of_reviews) #transposed for matmul
         # review_attentions
         review_feats = review_feats.view(batch_size, -1, num_of_reviews)
+        print(review_feats.shape)
         #Todo: for different embedding sizes
         review_attentions = torch.matmul(self.h.view(1, -1), self.relu(torch.matmul(self.W_O, review_feats) + torch.matmul(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
         review_attentions = self.softmax(review_attentions)  #batch_size X num_of_reviews
@@ -145,3 +180,18 @@ class EntityNet(nn.Module):
         target_id_embedding = self.entity_id_embeddings(target_id).view(batch_size,1, -1) #p_i
         entity_features = torch.cat((target_id_embedding, entity_features),dim=2).view(batch_size, -1)  #batch_size X (embedding_id_size + latent_size)  --- p_i + Y_i
         return entity_features
+
+def convert_batch_indices_to_word(review_indices_batch, dataset_object):
+
+    # Overall List
+    batch_element_list = []
+
+    # Iterating through the batch elements
+    for element in review_indices_batch:
+        # Each element is a 2-D matrix
+        for row in range(element.shape[0]):     # total rows = total reviews per user
+            temp_review_list = []
+            for col in range(element.shape[1]):  # total number of columns = max_rev_length
+                temp_review_list.append(dataset_object.idx2word[element[row][col].item()])
+            batch_element_list.append(temp_review_list)
+    return batch_element_list
