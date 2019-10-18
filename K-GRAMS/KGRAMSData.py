@@ -41,9 +41,9 @@ class KGRAMSData(Dataset, BaseData):
             items.append(data_dict[review_id]["itemID"])
             review_length = len(review)-2 #excluding <START_WORD> and <END_WORD>
             if review_length > seq_length:
-                review_t = review[0:seq_length+1]
+                review_t = review[0:seq_length]
             elif review_length < seq_length:
-                review_t = review[0:review_length+1]
+                review_t = review[0:review_length]
                 for i in range(review_length, seq_length):
                     review_t.append(PAD_INDEX)
             else:
@@ -120,7 +120,6 @@ class KGRAMSData(Dataset, BaseData):
                 review_item_ids.append(item_ids_of_user)
 
         self.data_length = len(target_ratings)
-        print("data_length", self.data_length)
         self.user_id_max = max(max(target_user_ids), max_u_id)
         self.item_id_max = max(max(target_item_ids), max_i_id)
         user_reviews = torch.stack(user_reviews, dim=0)

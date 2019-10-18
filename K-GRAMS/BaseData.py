@@ -4,13 +4,6 @@ from pprint import pprint
 import numpy as np
 import re
 import pickle
-import sys
-# import nltk
-# import en_core_web_sm
-# from nltk import word_tokenize
-import spacy
-import sys
-# nltk.download('punkt')
 
 np.random.seed(2017)
 
@@ -31,7 +24,7 @@ class BaseData:
     def __init__(self, data_dir):
         self.data_dir = data_dir
         self.word2idx = {}
-        self.unk_frequency = 3
+        self.unk_frequency = 5
 
         self.text_data = []
 
@@ -44,8 +37,10 @@ class BaseData:
         self.item_idx_counter = 0
 
         self.data = self.parse_data()
-        self.word2idx, self.idx2word = self.make_mappings()
         self.train_data, self.val_data, self.test_data = self.split_data()
+        self.word2idx, self.idx2word = self.make_mappings(self.train_data)
+        self.generate_review_idx(self.val_data)
+        self.generate_review_idx(self.test_data)
 
     def parse_data(self):
         data = defaultdict(dict)
@@ -69,28 +64,22 @@ class BaseData:
                 data[reviewID]["helpful"] = line_data["helpful"]
                 data[reviewID]["rating"] = line_data["overall"]
                 data[reviewID]["reviewText"] = line_data["reviewText"]
-                # nlp = en_core_web_sm.load()
                 # file_name.write(str(reviewID) +"  " + line_data["reviewText"]+ "\n")
                 line_data["reviewText"] = line_data["reviewText"].lower()
-                # text_split =  word_tokenize(line_data["reviewText"])
                 text_split = re.split("[ .,;()&!]+", line_data["reviewText"])
-                # tokenized = nlp(line_data["reviewText"])
-                # text_split = []
-                # [text_split.append(i) for i in tokenized] 
-                [self.text_data.append(word) for word in text_split]
                 data[reviewID]["reviewSplitText"] = text_split
 
         return data
 
-    def make_mappings(self):
+    def make_mappings(self,data):
         word2idx = {PAD_WORD:PAD_INDEX, START_WORD:START_INDEX, END_WORD:END_INDEX, UNK_WORD:UNK_INDEX}
         idx2word = {PAD_INDEX:PAD_WORD, START_INDEX:START_WORD, END_INDEX:END_WORD, UNK_INDEX:UNK_WORD}
 
         word_counter = Counter(self.text_data)
         vocab_file = open("vocab.txt", "w")
-        for review_id in self.data.keys():
+        for review_id in data.keys():
             review_sentence_idxs = [START_INDEX]
-            for word in self.data[review_id]["reviewSplitText"]:
+            for word in data[review_id]["reviewSplitText"]:
                 if word_counter[word] > self.unk_frequency:
                     # Add to the vocabulary
                     if word not in word2idx.keys():
@@ -105,13 +94,24 @@ class BaseData:
                 else:
                     review_sentence_idxs.append(UNK_INDEX)
 
-            # print((self.data[review_id]["reviewSplitText"]))
-            # print((review_sentence_idxs))
             review_sentence_idxs.append(END_INDEX)
-            self.data[review_id]['review'] = review_sentence_idxs
+            data[review_id]['review'] = review_sentence_idxs
         return word2idx, idx2word
 
+    def generate_review_idx(self, data):
+        for review_id in data.keys():
+            review_sentence_idxs = [START_INDEX]
+            for word in data[review_id]["reviewSplitText"]:
+                if word in self.word2idx.keys():
+                    review_sentence_idxs.append(self.word2idx[word])
+                else:
+                    review_sentence_idxs.append(UNK_INDEX)
+            review_sentence_idxs.append(END_INDEX)
+            data[review_id]['review'] = review_sentence_idxs
+
+
     def split_data(self, train_split = 0.7, val_split = 0.15, test_split = 0.15):
+        np.random.seed(2017)
         train_set = {}
         val_set = {}
         test_set = {}
@@ -124,6 +124,7 @@ class BaseData:
         #Train set
         for i in range(train_len):
             train_set[review_ids[i]] = self.data[review_ids[i]]
+            [self.text_data.append(word) for word in self.data[review_ids[i]]['reviewSplitText']]
         #Validation set
         for i in range(train_len, train_len+val_len):
             val_set[review_ids[i]] = self.data[review_ids[i]]
@@ -163,13 +164,12 @@ class BaseData:
 
 #
 if __name__ == "__main__":
-    root_dir = "/media/sohi/New Volume/UvA_Year2/git_ir2/IR2/data"
-    data_set_name = "Musical_Instruments_5.json"
+    root_dir = "./data/"
+    data_set_name = "Digital_Music_5.json"
     data_path = root_dir+data_set_name
     print("Processing Data - ", data_path)
     base_data = BaseData(data_path)
     # base_data.dump_pickle(root_dir, data_set_name)
-    print("Data dumped")
 
     # basedata is an instance of the BaseData class
     # base_data.train_data/val_data/test_data outputs a defaultdictionary with review_ids as key.
@@ -179,5 +179,4 @@ if __name__ == "__main__":
     # helpful is a list of [X,X]
     # rating is a number from 0-5
     # review is a list of indices corresponding to each word. Already with START and END of review.
-    # Thresholded at min 3 words, lowercased, NOT PADDED.
-
+            # Thresholded at min 3 words, lowercased, NOT PADDED.
