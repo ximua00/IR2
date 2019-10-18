@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
 import sys
+import time
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -106,7 +107,7 @@ def train(config):
                         hidden_size=50,
                         latent_size=70,
                         num_of_lstm_layers = 1,
-                        num_directions = 1,
+                        num_directions = 2,
                         lstm_hidden_dim = 50)
     kgrams_model = kgrams_model.to(device) 
 
@@ -123,7 +124,9 @@ def train(config):
     for epoch in range(config.epochs):
         rating_loss = []
         review_loss = []
+        start = time.time()
         for batch_num, batch in enumerate(data_generator_train):
+            print("Batch Number:", batch_num)
             target_user_ids = batch[0].to(device)
             target_item_ids = batch[1].to(device)
             target_ratings = batch[2].to(device)
@@ -165,7 +168,10 @@ def train(config):
             # break
             # sys.exit(1)
             # print("---------------------------------------------------")
-        # break
+        if epoch == 0:
+            end = time.time()
+            print("Time taken", end - start)
+        break
     print("Training Completed!")
     return kgrams_model
 
@@ -174,7 +180,7 @@ def train(config):
 if __name__ == "__main__":
     config = argparse.ArgumentParser()
     config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
-    config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Musical_Instruments_5.json", help='Dataset')
+    config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Digital_Music_5.json", help='Dataset')
     config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
     config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
     config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')

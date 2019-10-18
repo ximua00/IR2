@@ -60,10 +60,10 @@ class KGRAMS(nn.Module):
         self.num_directions = num_directions
         self.lstm_hidden_size = lstm_hidden_dim * num_directions * num_of_lstm_layers
         self.linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
-        self.lstm = nn.LSTM(input_size= (word_embedding_size + id_embedding_size + latent_size), hidden_size=self.lstm_hidden_size, batch_first=True)
-        self.linear_c0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
-        self.linear_h0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
-        self.lstm_linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
+        self.lstm = nn.LSTM(input_size= (word_embedding_size + id_embedding_size + latent_size), hidden_size=self.lstm_hidden_size, batch_first=True, bidirectional = True)
+        self.linear_c0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size * 2)
+        self.linear_h0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size * 2)
+        self.lstm_linear_layer = nn.Linear(self.lstm_hidden_size * 2, vocab_size)
         self.tanh = nn.Tanh()
 
     def initialize_lstm(self, init_values, batch_size):
@@ -132,6 +132,7 @@ class KGRAMS(nn.Module):
             lstm_input = lstm_input.squeeze()
             lstm_input = lstm_input.view(self.batch_size,repeat_size,lstm_input.shape[1])
             hidden_ouput, (h0, c0) = self.lstm(lstm_input, (h0, c0))
+            # print("Hidden Output", hidden_ouput.shape)
             out_probability = self.lstm_linear_layer(hidden_ouput)
             return predicted_rating, out_probability
         else:
