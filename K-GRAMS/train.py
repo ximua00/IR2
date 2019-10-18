@@ -96,8 +96,8 @@ def train(config):
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
-    user_embedding_idx = dataset_train.user_id_max
-    item_embedding_idx = dataset_train.item_id_max
+    user_embedding_idx = dataset_train.user_id_max + 1
+    item_embedding_idx = dataset_train.item_id_max + 1
 
     kgrams_model = KGRAMS(word_embedding_size=config.word_embedding_size,
                         vocab_size=vocab_size,
