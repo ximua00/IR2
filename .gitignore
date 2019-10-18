@@ -30,7 +30,6 @@ Temporary Items
 *.iml
 *.json
 *.gz
-<<<<<<< HEAD
 K-GRAMS/models/*.pt
 K-GRAMS/log/generated/*.*
 K-GRAMS/log/golden/*.*
