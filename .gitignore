@@ -33,3 +33,6 @@ Temporary Items
 *.text
 *.txt
 *.pt
+K-GRAMS/.pytest_cache/README.md
+K-GRAMS/.pytest_cache/v/cache/lastfailed
+K-GRAMS/.pytest_cache/v/cache/nodeids

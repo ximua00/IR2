@@ -40,7 +40,7 @@ class MRGData(BaseData):
         pickle.dump(data_set, pickle_file)
 
 if __name__ == "__main__":
-    mrg_data = MRGData("./data/Musical_Instruments_5.json")
+    mrg_data = MRGData("./data/Digital_Music_5.json")
     # train_pickle = pickle.load(open("train.pkl", "rb"))
     # with open("train.pkl", 'rb') as f:
     #   try:
