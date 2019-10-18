@@ -41,9 +41,9 @@ class KGRAMSData(Dataset, BaseData):
             items.append(data_dict[review_id]["itemID"])
             review_length = len(review)-2 #excluding <START_WORD> and <END_WORD>
             if review_length > seq_length:
-                review_t = review[0:seq_length]
+                review_t = review[0:seq_length+1]
             elif review_length < seq_length:
-                review_t = review[0:review_length]
+                review_t = review[0:review_length+1]
                 for i in range(review_length, seq_length):
                     review_t.append(PAD_INDEX)
             else:

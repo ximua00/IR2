@@ -29,8 +29,8 @@ class KGRAMS(nn.Module):
         self.review_length = review_length
         self.word_embedding_size = word_embedding_size
         self.batch_size = batch_size
-        # self.word_embeddings = nn.Embedding(num_embeddings=vocab_size,
-        #                                     embedding_dim=word_embedding_size)
+        self.word_embeddings = nn.Embedding(num_embeddings=vocab_size,
+                                            embedding_dim=word_embedding_size)
         self.user_net = EntityNet(embedding_id_size=id_embedding_size,
                                   word_embedding_size = word_embedding_size,
                                   out_channels=out_channels,
