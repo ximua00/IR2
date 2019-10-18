@@ -120,7 +120,6 @@ class KGRAMSData(Dataset, BaseData):
                 review_item_ids.append(item_ids_of_user)
 
         self.data_length = len(target_ratings)
-        print("data_length", self.data_length)
         self.user_id_max = max(max(target_user_ids), max_u_id)
         self.item_id_max = max(max(target_item_ids), max_i_id)
         user_reviews = torch.stack(user_reviews, dim=0)
