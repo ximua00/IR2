@@ -122,8 +122,20 @@ def train(config):
     mse_loss = nn.MSELoss()
     crossentr_loss = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(kgrams_model.parameters(), lr=config.narre_learning_rate)
-    # mrg_optimizer = torch.optim.Adam(mrg.parameters(), lr=config.mrg_learning_rate)
+    # optimizer = torch.optim.Adam(kgrams_model.parameters(), lr=config.narre_learning_rate)
+    lstm_modules = []
+    base_modules = []
+    for m in kgrams_model.parameters():
+        if isinstance(m, nn.LSTM):
+            lstm_modules.append(m)
+        else:
+            base_modules.append(m)
+
+    optimizer = torch.optim.Adam([
+        {"params": base_modules},
+        {"params": lstm_modules, 'lr': config.mrg_learning_rate}
+        ],
+        lr=config.narre_learning_rate)
 
     train_rating_loss = []
     train_review_loss = []
