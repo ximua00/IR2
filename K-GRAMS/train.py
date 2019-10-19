@@ -8,7 +8,8 @@ import numpy as np
 import sys
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(device)
+print("Device detected: ", device)
+np.random.seed(2017)
 
 def get_one_review_from_batch(word_idx_batch_list, idx2word):
     for batch in word_idx_batch_list:
