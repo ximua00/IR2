@@ -72,7 +72,7 @@ class KGRAMSData(Dataset, BaseData):
         while len(review_list) > self.num_reviews_per_user:
             review_list.pop()
 
-    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data ):
+    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data, mode = "train" ):
         target_user_ids = []
         target_item_ids = []
         target_ratings = []
@@ -120,9 +120,11 @@ class KGRAMSData(Dataset, BaseData):
                 review_item_ids.append(item_ids_of_user)
 
         self.data_length = len(target_ratings)
-        print("data_length", self.data_length)
-        self.user_id_max = max(max(target_user_ids), max_u_id)
-        self.item_id_max = max(max(target_item_ids), max_i_id)
+        if mode is "train":
+            self.user_id_max = max(max(target_user_ids), max_u_id)
+            self.item_id_max = max(max(target_item_ids), max_i_id)
+        # self.user_id_max = max(max(target_user_ids), max_u_id)
+        # self.item_id_max = max(max(target_item_ids), max_i_id)
         user_reviews = torch.stack(user_reviews, dim=0)
         item_reviews = torch.stack(item_reviews, dim=0)
         return target_user_ids, target_item_ids, target_ratings, target_reviews, user_reviews, \
@@ -187,9 +189,13 @@ class KGRAMSEvalData(KGRAMSData):
         return user_review_ids, item_review_ids, user_item_data
 
 
-    def load_data(self):
+    # def load_data(self):
+    #     user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_data_dict)
+    #     return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data)
+
+    def load_eval_data(self):
         user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_data_dict)
-        return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data)
+        return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data, mode="eval")
 
     def __getitem__(self, idx):
         return self.target_user_ids[idx], self.target_item_ids[idx], self.target_ratings[idx], self.target_reviews[idx], \
