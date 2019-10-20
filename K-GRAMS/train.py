@@ -90,9 +90,9 @@ def validate(config, model, vocab_size, data_generator):
 def train(config):
     data_path = config.root_dir + config.data_set_name
     print("Processing Data - ", data_path)
-    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user = 8)
-    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=8)
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
+    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user = 20)
+    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=20)
+    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
