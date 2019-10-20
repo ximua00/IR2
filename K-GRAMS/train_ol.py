@@ -1,35 +1,27 @@
 import torch
 import argparse
-from config import config, device
 from KGRAMSData import KGRAMSData, KGRAMSEvalData, KGRAMSTrainData
 from model import KGRAMS
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
-import pickle as pickle
 import sys
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-np.random.seed(2017)
-
-def dump_pickle(file_name,data):
-    pickle_file = open(file_name, 'wb')
-    print("Dumping pickle : ", file_name)
-    pickle.dump(data, pickle_file)
 
 def get_one_review_from_batch(word_idx_batch_list, idx2word):
-    batch_reviews = []
     for batch in word_idx_batch_list:
         review = []
         for idx in batch:
             review.append(idx2word[idx])
         review = (" ".join(review))
-        batch_reviews.append(review)
-    return batch_reviews
+        break
+    return review
+
 
 def test(config, model, dataset):
-    data_generator = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
+    data_generator = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=0,drop_last=True, timeout=0)
     for input in data_generator:
         target_user_id = input[0].to(device)
         target_item_id = input[1].to(device)
@@ -50,18 +42,11 @@ def test(config, model, dataset):
 
         # print(word_idx_seq)
         actual_review = get_one_review_from_batch(target_reviews.tolist(), dataset.idx2word)
-        generated_review = get_one_review_from_batch(word_idx_seq, dataset.idx2word)
-        for (orig, gen) in zip(actual_review, generated_review):
-            print("------Original Review----------------")
-            print(orig)
-            print("--------Generated Review--------------")
-            print(gen)
-
-        # generated_review = get_one_review_from_batch(word_idx_seq.tolist(), dataset.idx2word)
-        # print("------Original Review----------------")
-        # print(actual_review)
-        # print("--------Generated Review--------------")
-        # print(generated_review)
+        generated_review = get_one_review_from_batch(word_idx_seq.tolist(), dataset.idx2word)
+        print("------Original Review----------------")
+        print(actual_review)
+        print("--------Generated Review--------------")
+        print(generated_review)
 
         break
 
@@ -101,14 +86,13 @@ def validate(config, model, vocab_size, data_generator, dataset_object):
 def train(config):
     data_path = config.root_dir + config.data_set_name
     print("Processing Data - ", data_path)
-    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user=8)
-    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=8)
-    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
+    dataset_train = KGRAMSTrainData(data_path, config.review_length)
+    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate")
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
-    user_embedding_idx = dataset_train.user_id_max + 1
-    item_embedding_idx = dataset_train.item_id_max + 1
+    user_embedding_idx = dataset_train.user_id_max
+    item_embedding_idx = dataset_train.item_id_max
 
     kgrams_model = KGRAMS(word_embedding_size=config.word_embedding_size,
                         vocab_size=vocab_size,
@@ -133,25 +117,8 @@ def train(config):
     mse_loss = nn.MSELoss()
     crossentr_loss = nn.CrossEntropyLoss()
 
-    # optimizer = torch.optim.Adam(kgrams_model.parameters(), lr=config.narre_learning_rate)
-    lstm_modules = []
-    base_modules = []
-    for m in kgrams_model.parameters():
-        if isinstance(m, nn.LSTM):
-            lstm_modules.append(m)
-        else:
-            base_modules.append(m)
-
-    optimizer = torch.optim.Adam([
-        {"params": base_modules},
-        {"params": lstm_modules, 'lr': config.mrg_learning_rate}
-        ],
-        lr=config.narre_learning_rate)
-
-    train_rating_loss = []
-    train_review_loss = []
-    val_rating_loss = []
-    val_review_loss = []
+    optimizer = torch.optim.Adam(kgrams_model.parameters(), lr=config.narre_learning_rate)
+    # mrg_optimizer = torch.optim.Adam(mrg.parameters(), lr=config.mrg_learning_rate)
 
     for epoch in range(config.epochs):
         rating_loss = []
@@ -185,7 +152,7 @@ def train(config):
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
-            break
+            # break
         if (epoch % config.eval_freq == 0):
             PATH = "models/model_"+str(epoch)+".pt"
             torch.save(kgrams_model.state_dict(), PATH)
@@ -193,45 +160,33 @@ def train(config):
             print("-------------EPOCH:",epoch,"----------------------")
             print("TRAIN : Rating Loss - ", np.mean(rating_loss), "LSTM loss - ", np.mean(review_loss))
             print("VALIDATION:   Rating Loss - ", avg_rating_loss, "LSTM loss - ", avg_rev_loss)
-            train_rating_loss.append(np.mean(rating_loss))
-            train_review_loss.append((np.mean(review_loss)))
-            val_rating_loss.append(avg_rating_loss)
-            val_review_loss.append(avg_rev_loss)
-            print("--------------Generating review--------------------")
-            test(config, kgrams_model, dataset_test)
-            print("---------------------------------------------------")
-            break
-        break
+            # print("--------------Generating review--------------------")
+            # test(config, kgrams_model, dataset_test)
+            # break
+            # sys.exit(1)
+            # print("---------------------------------------------------")
+        # break
     print("Training Completed!")
-    dump_pickle("train_rating_loss.pkl", train_rating_loss)
-    dump_pickle("train_review_loss.pkl", train_review_loss)
-    dump_pickle("val_rating_loss.pkl", val_rating_loss)
-    dump_pickle("val_review_loss.pkl", val_review_loss)
-
-
-
     return kgrams_model
 
 
 
 if __name__ == "__main__":
+    config = argparse.ArgumentParser()
+    config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
+    config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Musical_Instruments_5.json", help='Dataset')
+    config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
+    config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
+    config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')
+    config.add_argument('-mlr', '--mrg_learning_rate', required=False, type=float, default=0.0003, help='MRG learning rate')
+    config.add_argument('-epochs', '--epochs', required=False, type=int, default=1, help='epochs')
+    config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default= 1024, help='Word embedding size')
+    config.add_argument('-iembed', '--id_embedding_size', required=False, type=int, default=100, help='Item/User embedding size')
+    config.add_argument('-efreq', '--eval_freq', required=False, type=int, default=100,help='Evaluation Frequency')
+    config = config.parse_args()
     model = train(config)
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
-    # config = argparse.ArgumentParser()
-    # config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
-    # config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Digital_Music_5.json", help='Dataset')
-    # config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
-    # config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
-    # config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')
-    # config.add_argument('-mlr', '--mrg_learning_rate', required=False, type=float, default=0.0003, help='MRG learning rate')
-    # config.add_argument('-epochs', '--epochs', required=False, type=int, default=1, help='epochs')
-    # config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default= 1024, help='Word embedding size')
-    # config.add_argument('-iembed', '--id_embedding_size', required=False, type=int, default=100, help='Item/User embedding size')
-    # config.add_argument('-efreq', '--eval_freq', required=False, type=int, default=100,help='Evaluation Frequency')
-    # config = config.parse_args()
-    # model = train(config)
-    # data_path = config.root_dir + config.data_set_name
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
-    # test(config, model, dataset_test)
+    data_path = config.root_dir + config.data_set_name
+    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
+    test(config, model, dataset_test)
     #"Musical_Instruments_5.json"
     #Digital_Music_5.json

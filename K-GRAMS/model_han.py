@@ -200,7 +200,7 @@ class main_model(nn.Module):
         # self.doc_classifier = lin_softmax(dropout_FC, num_classes, hidden_dim)
         if torch.cuda.is_available():
             self.embedding.to(device = torch.device('cuda'))
-            self.l_softmax.to(device=torch.device('cuda'))
+            # self.l_softmax.to(device=torch.device('cuda'))
     
     def forward(self, rev_embeddings, num_of_reviews):
 

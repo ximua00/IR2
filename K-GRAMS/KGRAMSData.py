@@ -72,7 +72,7 @@ class KGRAMSData(Dataset, BaseData):
         while len(review_list) > self.num_reviews_per_user:
             review_list.pop()
 
-    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data ):
+    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data, mode = "train" ):
         target_user_ids = []
         target_item_ids = []
         target_ratings = []
@@ -122,8 +122,11 @@ class KGRAMSData(Dataset, BaseData):
         self.data_length = len(target_ratings)
         self.user_id_max = max(max(target_user_ids), max_u_id)
         self.item_id_max = max(max(target_item_ids), max_i_id)
-        user_reviews = torch.stack(user_reviews, dim=0)
-        item_reviews = torch.stack(item_reviews, dim=0)
+        if mode is "train":
+            self.user_id_max = max(max(target_user_ids), max_u_id)
+            self.item_id_max = max(max(target_item_ids), max_i_id)
+        # user_reviews = torch.stack(user_reviews, dim=0)
+        # item_reviews = torch.stack(item_reviews, dim=0)
         return target_user_ids, target_item_ids, target_ratings, target_reviews, user_reviews, \
                item_reviews, review_user_ids, review_item_ids, target_reviews_x, target_reviews_y
 
