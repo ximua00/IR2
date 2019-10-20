@@ -79,7 +79,6 @@ class KGRAMS(nn.Module):
         test_batch_size = 1
         input = torch.LongTensor(test_batch_size, 1).fill_(START_INDEX).to(device)
         # input_embedding = self.word_embeddings(input)
-        print("Size of input", input.shape)
         input = input.unsqueeze(dim = 2)
         words_from_ids = convert_batch_indices_to_word(input, self.dataset_object)
         character_ids = batch_to_ids(words_from_ids)
