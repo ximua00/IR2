@@ -185,7 +185,7 @@ def train(config):
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
-            break
+#             break
         if (epoch % config.eval_freq == 0):
             PATH = "models/model_"+str(epoch)+".pt"
             torch.save(kgrams_model.state_dict(), PATH)
@@ -200,8 +200,8 @@ def train(config):
             print("--------------Generating review--------------------")
             test(config, kgrams_model, dataset_test)
             print("---------------------------------------------------")
-            break
-        break
+#             break
+#         break
     print("Training Completed!")
     dump_pickle("train_rating_loss.pkl", train_rating_loss)
     dump_pickle("train_review_loss.pkl", train_review_loss)
