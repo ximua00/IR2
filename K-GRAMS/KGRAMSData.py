@@ -22,12 +22,15 @@ UNK_WORD = '<UNK>'
 class KGRAMSData(Dataset, BaseData):
     def __init__(self, data_dir, seq_length, num_reviews_per_user):
         super(KGRAMSData, self).__init__(data_dir)
+        self.review_length = seq_length
         self.base_data_set = self.train_data
         self.num_of_reviews = len(self.base_data_set)
         self.num_reviews_per_user = num_reviews_per_user
         self.vocab_size = len(self.word2idx)
         # Truncate/Pad review to seq_length
         self.base_data_dict, self.user_count, self.item_count = self.preprocess_data(self.base_data_set, seq_length)
+        #Add dummy review into the dict
+        self.dummy_review_id = self.add_dummy_review(self.base_data_dict)
         self.base_user_review_ids, self.base_item_review_ids, self.base_user_item_data = self.get_data_dictionaries(self.base_data_dict)
 
     def preprocess_data(self, data_dict_t, seq_length):
@@ -52,12 +55,25 @@ class KGRAMSData(Dataset, BaseData):
             data_dict[review_id]["review"] = review_t
         return data_dict, len(set(users)), len(set(items))
 
+    def add_dummy_review(self, data_dict):
+        dummy_user_id = 0
+        dummy_item_id = 0
+        dummy_review_id = 1000000
+        dummy_review = [START_INDEX] + ([PAD_INDEX] * self.review_length)
+        dummy_review.append(END_INDEX)
+        data_dict[dummy_review_id]["userID"] = dummy_user_id
+        data_dict[dummy_review_id]["itemID"] = dummy_item_id
+        data_dict[dummy_review_id]["review"] = dummy_review
+        return dummy_review_id
+
+
     def get_data_dictionaries(self, data_dict):
         user_review_ids = defaultdict(list)
         item_review_ids = defaultdict(list)
         user_item_data = []
 
         for review_id in data_dict.keys():
+            if review_id == self.dummy_review_id: continue
             user_id = data_dict[review_id]["userID"]
             item_id = data_dict[review_id]["itemID"]
             review = data_dict[review_id]["review"]
@@ -69,10 +85,14 @@ class KGRAMSData(Dataset, BaseData):
         return user_review_ids, item_review_ids, user_item_data
 
     def process_num_of_reviews(self, review_list):
-        while len(review_list) > self.num_reviews_per_user:
-            review_list.pop()
+        if len(review_list) > self.num_reviews_per_user:
+            review_list = review_list[0: self.num_reviews_per_user]
+        elif len(review_list) < self.num_reviews_per_user:
+            while len(review_list) < self.num_reviews_per_user:
+                review_list.append(self.dummy_review_id)
+        return review_list
 
-    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data, mode = "train" ):
+    def process_data(self, data_dict, user_review_ids, item_review_ids, user_item_data, mode = "train"):
         target_user_ids = []
         target_item_ids = []
         target_ratings = []
@@ -90,41 +110,48 @@ class KGRAMSData(Dataset, BaseData):
             one_item_reviews = []
             item_ids_of_user = []
             user_ids_of_item = []
-            if len(user_review_ids[user_id]) > 1 and len(user_review_ids[user_id]) > self.num_reviews_per_user+1:
-                self.process_num_of_reviews(user_review_ids[user_id])
+
+            if len(user_review_ids[user_id]) > 1 and len(item_review_ids[item_id]) > 1:
+                user_review_ids[user_id] = self.process_num_of_reviews(user_review_ids[user_id])
                 if user_id in user_review_ids.keys():
                     for review_id in user_review_ids[user_id]:
                         if data_dict[review_id]["itemID"] is not item_id:
                             one_user_reviews.append(data_dict[review_id]["review"])
                             item_ids_of_user.append(data_dict[review_id]["itemID"])
+                    if len(one_user_reviews) == self.num_reviews_per_user - 1 :
+                        one_user_reviews.append(data_dict[self.dummy_review_id]["review"])
+                        item_ids_of_user.append(data_dict[self.dummy_review_id]["itemID"])
+
                     if max(item_ids_of_user) > max_i_id: max_i_id = max(item_ids_of_user)
 
-            if len(item_review_ids[item_id]) > 1 and len(item_review_ids[item_id]) > self.num_reviews_per_user+1:
-                self.process_num_of_reviews(item_review_ids[item_id])
+                item_review_ids[item_id] = self.process_num_of_reviews(item_review_ids[item_id])
                 if item_id in item_review_ids.keys():
                     for review_id in item_review_ids[item_id]:
                         if data_dict[review_id]["userID"] is not user_id:
                             one_item_reviews.append(data_dict[review_id]["review"])
                             user_ids_of_item.append(data_dict[review_id]["userID"])
+                    if len(one_item_reviews) == self.num_reviews_per_user - 1:
+                        one_item_reviews.append(data_dict[self.dummy_review_id]["review"])
+                        user_ids_of_item.append(data_dict[self.dummy_review_id]["userID"])
                     if max(user_ids_of_item) > max_u_id: max_u_id = max(user_ids_of_item)
-            if len(one_user_reviews) is not 0 and len(one_item_reviews)is not 0:
-                target_user_ids.append(user_id)
-                target_item_ids.append(item_id)
-                target_ratings.append(rating)
-                target_reviews.append(review)
-                target_reviews_x.append(review[0:-1])
-                target_reviews_y.append(review[1:])
-                user_reviews.append(torch.LongTensor(one_user_reviews))
-                item_reviews.append(torch.LongTensor(one_item_reviews))
-                review_user_ids.append(user_ids_of_item)
-                review_item_ids.append(item_ids_of_user)
+
+                if len(one_user_reviews) is not 0 and len(one_item_reviews)is not 0:
+                    target_user_ids.append(user_id)
+                    target_item_ids.append(item_id)
+                    target_ratings.append(rating)
+                    target_reviews.append(review)
+                    target_reviews_x.append(review[0:-1])
+                    target_reviews_y.append(review[1:])
+                    user_reviews.append(torch.LongTensor(one_user_reviews))
+                    item_reviews.append(torch.LongTensor(one_item_reviews))
+                    review_user_ids.append(user_ids_of_item)
+                    review_item_ids.append(item_ids_of_user)
 
         self.data_length = len(target_ratings)
+        print("data_length", self.data_length)
         if mode is "train":
             self.user_id_max = max(max(target_user_ids), max_u_id)
             self.item_id_max = max(max(target_item_ids), max_i_id)
-        # self.user_id_max = max(max(target_user_ids), max_u_id)
-        # self.item_id_max = max(max(target_item_ids), max_i_id)
         user_reviews = torch.stack(user_reviews, dim=0)
         item_reviews = torch.stack(item_reviews, dim=0)
         return target_user_ids, target_item_ids, target_ratings, target_reviews, user_reviews, \
@@ -161,7 +188,7 @@ class KGRAMSEvalData(KGRAMSData):
         self.num_of_reviews = len(self.dataset)
         self.eval_data_dict, self.eval_user_count, self.eval_item_count = self.preprocess_data(self.dataset, seq_length)
         self.target_user_ids, self.target_item_ids, self.target_ratings, self.target_reviews, self.user_reviews, \
-        self.item_reviews, self.review_user_ids, self.review_item_ids, self.target_reviews_x, self.target_reviews_y = self.load_data()
+        self.item_reviews, self.review_user_ids, self.review_item_ids, self.target_reviews_x, self.target_reviews_y = self.load_eval_data()
     def get_mode_data(self, mode):
         if mode is "validate":
             data_set = self.val_data
@@ -189,10 +216,6 @@ class KGRAMSEvalData(KGRAMSData):
         return user_review_ids, item_review_ids, user_item_data
 
 
-    # def load_data(self):
-    #     user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_data_dict)
-    #     return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data)
-
     def load_eval_data(self):
         user_review_ids, item_review_ids, user_item_data = self.get_eval_data_dictionaries(self.eval_data_dict)
         return self.process_data(self.base_data_dict, user_review_ids, item_review_ids, user_item_data, mode="eval")
@@ -204,3 +227,9 @@ class KGRAMSEvalData(KGRAMSData):
 
     def __len__(self):
         return self.data_length
+
+    if __name__ == "__main__":
+        root_dir = "../data/"
+        data_set_name = "Digital_Music_5.json"
+        data_path = root_dir + data_set_name
+        dataset_train = KGRAMSTrainData(data_path, 80, num_reviews_per_user=20)
