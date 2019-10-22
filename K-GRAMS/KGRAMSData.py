@@ -58,7 +58,7 @@ class KGRAMSData(Dataset, BaseData):
     def add_dummy_review(self, data_dict):
         dummy_user_id = 0
         dummy_item_id = 0
-        dummy_review_id = len(data_dict) + 1
+        dummy_review_id = 1000000
         dummy_review = [START_INDEX] + ([PAD_INDEX] * self.review_length)
         dummy_review.append(END_INDEX)
         data_dict[dummy_review_id]["userID"] = dummy_user_id

@@ -112,9 +112,9 @@ class BaseData:
 
     def split_data(self, train_split = 0.7, val_split = 0.15, test_split = 0.15):
         np.random.seed(2017)
-        train_set = {}
-        val_set = {}
-        test_set = {}
+        train_set = defaultdict(dict)
+        val_set = defaultdict(dict)
+        test_set = defaultdict(dict)
         data_size = len(self.data)
         train_len = int(train_split * data_size)
         val_len = int(val_split * data_size)
