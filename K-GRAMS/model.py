@@ -107,8 +107,6 @@ class KGRAMS(nn.Module):
             return predicted_rating, reviews
 
 
-
-
 class EntityNet(nn.Module):
     def __init__(self, embedding_id_size, out_channels, filter_size, review_length, score_size, id_size, hidden_size, latent_size):
         super(EntityNet, self).__init__()

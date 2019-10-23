@@ -181,3 +181,5 @@ if __name__ == "__main__":
     # review is a list of indices corresponding to each word. Already with START and END of review.
             # Thresholded at min 3 words, lowercased, NOT PADDED.
 
+    print(base_data.train_data)
+

@@ -1,16 +1,20 @@
 import torch
 import argparse
+import sys
+sys.path.append("..")
 from config import config, device
-from KGRAMSData import KGRAMSData, KGRAMSEvalData, KGRAMSTrainData
+from KGRAMSData import KGRAMSEvalData, KGRAMSTrainData
 from model import KGRAMS
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import numpy as np
 import pickle
 
+from utils import plot_loss, make_directory
+
 np.random.seed(2017)
 
-def dump_pickle(file_name,data):
+def dump_pickle(file_name, data):
     pickle_file = open(file_name, 'wb')
     print("Dumping pickle : ", file_name)
     pickle.dump(data, pickle_file)
@@ -27,7 +31,7 @@ def get_one_review_from_batch(word_idx_batch_list, idx2word):
 
 
 def test(config, model, dataset):
-    data_generator = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=0,drop_last=True, timeout=0)
+    data_generator = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=4,drop_last=True, timeout=0)
     for input in data_generator:
         target_user_id = input[0].to(device)
         target_item_id = input[1].to(device)
@@ -90,14 +94,14 @@ def validate(config, model, vocab_size, data_generator):
 def train(config):
     data_path = config.root_dir + config.data_set_name
     print("Processing Data - ", data_path)
-    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user = 8)
-    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=8)
+    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user = config.num_reviews_per_user)
+    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=config.num_reviews_per_user)
     # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
-    user_embedding_idx = dataset_train.user_id_max
-    item_embedding_idx = dataset_train.item_id_max
+    user_embedding_idx = dataset_train.user_id_max + 1
+    item_embedding_idx = dataset_train.item_id_max + 1
 
     kgrams_model = KGRAMS(word_embedding_size=config.word_embedding_size,
                         vocab_size=vocab_size,
@@ -115,15 +119,26 @@ def train(config):
                         lstm_hidden_dim = 50)
     kgrams_model = kgrams_model.to(device)
 
-    data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
-    data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
+    data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
+    data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
 
 
     mse_loss = nn.MSELoss()
     crossentr_loss = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(kgrams_model.parameters(), lr=config.narre_learning_rate)
-    # mrg_optimizer = torch.optim.Adam(mrg.parameters(), lr=config.mrg_learning_rate)
+    lstm_modules = []
+    base_modules = []
+    for m in kgrams_model.parameters():
+        if isinstance(m, nn.LSTM):
+            lstm_modules.append(m)
+        else:
+            base_modules.append(m)
+    
+    optimizer = torch.optim.Adam([
+                                    {"params": base_modules},
+                                    {"params": lstm_modules, 'lr': config.mrg_learning_rate}
+                                ],
+                                lr=config.narre_learning_rate)
 
     train_rating_loss = []
     train_review_loss = []
@@ -152,18 +167,20 @@ def train(config):
                                                               item_reviews=item_reviews,
                                                               item_ids_of_reviews=review_item_ids,
                                                               target_reviews_x = target_reviews_x)
+
             rating_pred_loss = mse_loss(predicted_rating.squeeze(), target_ratings.float())
             review_probabilities = review_probabilities.view(-1, vocab_size)
             review_gen_loss = crossentr_loss(review_probabilities, target_reviews_y.view(-1))
             optimizer.zero_grad()
             rating_pred_loss.backward(retain_graph = True)
             review_gen_loss.backward()
+            torch.nn.utils.clip_grad_norm(kgrams_model.parameters(), max_norm=10.0)
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
+
         if (epoch % config.eval_freq == 0):
-            PATH = "models/model_"+str(epoch)+".pt"
-            torch.save(kgrams_model, PATH)
+            
             avg_rating_loss, avg_rev_loss = validate(config, kgrams_model, dataset_train.vocab_size, data_generator_val)
             print("-------------EPOCH:",epoch,"----------------------")
             print("TRAIN : Rating Loss - ", np.mean(rating_loss), "LSTM loss - ", np.mean(review_loss))
@@ -175,12 +192,19 @@ def train(config):
             # print("--------------Generating review--------------------")
             # test(config, kgrams_model, dataset_test)
             # print("---------------------------------------------------")
-
+        if (epoch % config.save_freq == 0):
+            save_path = make_directory("./models/" + config.exp_name)
+            torch.save(kgrams_model, save_path + "/model_" + str(epoch) + ".pt")
+            
     print("Training Completed!")
-    dump_pickle("train_rating_loss.pkl", train_rating_loss)
-    dump_pickle("train_review_loss.pkl", train_review_loss)
-    dump_pickle("val_rating_loss.pkl", val_rating_loss)
-    dump_pickle("val_review_loss.pkl", val_review_loss)
+    # dump_pickle("train_rating_loss.pkl", train_rating_loss)
+    # dump_pickle("train_review_loss.pkl", train_review_loss)
+    # dump_pickle("val_rating_loss.pkl", val_rating_loss)
+    # dump_pickle("val_review_loss.pkl", val_review_loss)
+    
+    plot_loss(train_rating_loss, val_rating_loss, "rating", config.exp_name)
+    plot_loss(train_review_loss, val_review_loss, "review", config.exp_name)
+
 
     return kgrams_model
 
