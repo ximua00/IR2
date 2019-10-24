@@ -79,8 +79,8 @@ class KGRAMS(nn.Module):
         test_batch_size = 1
         input = torch.LongTensor(test_batch_size, 1).fill_(START_INDEX).to(device)
         input_embedding = self.word_embeddings(input)
-        print("input embedding before", input_embedding.shape)
-        print("sentiment feat before", sentiment_feat.shape)
+#         print("input embedding before", input_embedding.shape)
+#         print("sentiment feat before", sentiment_feat.shape)
         # input = input.unsqueeze(dim = 2)
         # words_from_ids = convert_batch_indices_to_word(input, self.dataset_object)
         # character_ids = batch_to_ids(words_from_ids)
@@ -102,8 +102,8 @@ class KGRAMS(nn.Module):
             # elmo_embeddings_dict = elmo(character_ids)
             # input_embedding = elmo_embeddings_dict['elmo_representations'][0]
             input_embedding = input_embedding.to(device)
-            print("Input embedding", input_embedding.shape)
-            print("Sentiment feat", sentiment_feat.shape)
+#             print("Input embedding", input_embedding.shape)
+#             print("Sentiment feat", sentiment_feat.shape)
             input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2) # [5, 1, 1380]
             # word_idx = word_idx.squeeze(dim = 2)
             # review_generated.append(word_idx.detach().t())
