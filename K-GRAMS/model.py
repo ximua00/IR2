@@ -53,7 +53,7 @@ class KGRAMS(nn.Module):
                                   latent_size=latent_size)
 
         #Rating prediction layer
-        self.W_1 = nn.Parameter(torch.rand(1, id_embedding_size + latent_size))
+        self.W_1 = nn.Parameter(torch.rand(1, id_embedding_size + 2*hidden_size))
         self.b_u = nn.Parameter(torch.rand(batch_size))
         self.b_i = nn.Parameter(torch.rand(batch_size))
         self.mu = nn.Parameter(torch.rand(batch_size))
@@ -62,7 +62,7 @@ class KGRAMS(nn.Module):
         self.num_directions = num_directions
         self.lstm_hidden_size = lstm_hidden_dim * num_directions * num_of_lstm_layers
         self.linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
-        self.lstm = nn.LSTM(input_size= (word_embedding_size + id_embedding_size + latent_size), hidden_size=self.lstm_hidden_size, batch_first=True)
+        self.lstm = nn.LSTM(input_size= (word_embedding_size + id_embedding_size + 2 * hidden_size), hidden_size=self.lstm_hidden_size, batch_first=True)
         self.linear_c0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
         self.linear_h0 = nn.Linear(2 * (id_embedding_size), self.lstm_hidden_size)
         self.lstm_linear_layer = nn.Linear(self.lstm_hidden_size, vocab_size)
@@ -79,6 +79,8 @@ class KGRAMS(nn.Module):
         test_batch_size = 1
         input = torch.LongTensor(test_batch_size, 1).fill_(START_INDEX).to(device)
         input_embedding = self.word_embeddings(input)
+        print("input embedding before", input_embedding.shape)
+        print("sentiment feat before", sentiment_feat.shape)
         # input = input.unsqueeze(dim = 2)
         # words_from_ids = convert_batch_indices_to_word(input, self.dataset_object)
         # character_ids = batch_to_ids(words_from_ids)
@@ -93,15 +95,17 @@ class KGRAMS(nn.Module):
             # word_idx = torch.argmax(out_probability, dim=2)
             word_weights = out_probability.squeeze().exp()
             word_idx = torch.multinomial(word_weights, 1)[0].view(test_batch_size, 1)
-            word_idx = word_idx.unsqueeze(dim=2)
+            # word_idx = word_idx.unsqueeze(dim=2)
             input_embedding = self.word_embeddings(word_idx)#.view(self.batch_size, 1, -1)
             # words_from_ids = convert_batch_indices_to_word(word_idx, self.dataset_object)
             # character_ids = batch_to_ids(words_from_ids)
             # elmo_embeddings_dict = elmo(character_ids)
             # input_embedding = elmo_embeddings_dict['elmo_representations'][0]
             input_embedding = input_embedding.to(device)
+            print("Input embedding", input_embedding.shape)
+            print("Sentiment feat", sentiment_feat.shape)
             input_embedding = torch.cat([input_embedding, sentiment_feat], dim=2) # [5, 1, 1380]
-            word_idx = word_idx.squeeze(dim = 2)
+            # word_idx = word_idx.squeeze(dim = 2)
             # review_generated.append(word_idx.detach().t())
             review_generated.append(word_idx.squeeze().item())
         # review_generated = torch.stack(review_generated, dim=0)
@@ -133,15 +137,20 @@ class KGRAMS(nn.Module):
             # elmo_embeddings_dict = elmo(character_ids)
             # review_embedding = elmo_embeddings_dict['elmo_representations'][0]
             review_embedding = review_embedding.to(device)
-            # sentiment_feats = torch.tensor(user_item_features)
-            # sentiment_feats = sentiment_feats.unsqueeze(dim = 1)
-            # repeat_size = int(review_embedding.shape[0] / sentiment_feats.shape[0])
-            sentiment_feats =  user_item_features.repeat(review_embedding.size(1), 1).view(self.batch_size, review_embedding.size(1), -1)
-            # sentiment_feats = sentiment_feats.repeat(repeat_size, 1, 1)#.view(self.batch_size, review_embedding.size(1), -1)
+            sentiment_feats = torch.tensor(user_item_features)
+            sentiment_feats = sentiment_feats.unsqueeze(dim = 1)
+            repeat_size = int(review_embedding.shape[1] / sentiment_feats.shape[1])
+            # sentiment_feats =  user_item_features.repeat(review_embedding.size(1), 1).view(self.batch_size, review_embedding.size(1), -1)
+            sentiment_feats = sentiment_feats.repeat(1, repeat_size, 1)#.view(self.batch_size, review_embedding.size(1), -1)
             sentiment_feats = sentiment_feats.to(device)
+            # print("sent feats shape",sentiment_feats.shape)
+            # print("review emb shape", review_embedding.shape)
             lstm_input = torch.cat([review_embedding,sentiment_feats],dim=2)
-            lstm_input = lstm_input.squeeze()
-            lstm_input = lstm_input.view(self.batch_size,repeat_size,lstm_input.shape[1])
+            # print("lstm input", lstm_input.shape)
+            # print("h0", h0.shape)
+            # print("c0", c0.shape)
+            # lstm_input = lstm_input.squeeze()
+            # lstm_input = lstm_input.view(self.batch_size,repeat_size,lstm_input.shape[1])
             hidden_ouput, (h0, c0) = self.lstm(lstm_input, (h0, c0))
             out_probability = self.lstm_linear_layer(hidden_ouput)
             return predicted_rating, out_probability
@@ -193,7 +202,8 @@ class EntityNet(nn.Module):
         # print(rev_embeddings.shape) # 45 x 82 x 1024
         # input_embeddings = rev_embeddings.view(rev_embeddings.size(0), 1, rev_embeddings.size(1), rev_embeddings.size(2)).to(device)
         # 45 x 1 x 82 x 1024 ; o/p size: batch_size X num_of_reviews X review_length X embedding_size
-        rev_embeddings = word_embeddings(reviews)  
+        input_embedding = reviews.view(reviews.size(0)*reviews.size(1), reviews.size(2))
+        rev_embeddings = word_embeddings(input_embedding)  
         # input_embeddings = rev_embeddings.view(rev_embeddings.size(0) * rev_embeddings.size(1), 1, rev_embeddings.size(2), rev_embeddings.size(3))
         # x = self.conv2d(input_embeddings)  #o/p size:  num_of_reviews * out_channels * filter_out_size1 * filter_out_size2
         # print("Size of x after conv2d", x.shape) # 45 x 100 X 80 X 925
