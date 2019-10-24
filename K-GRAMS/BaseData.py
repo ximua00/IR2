@@ -4,6 +4,10 @@ from pprint import pprint
 import numpy as np
 import re
 import pickle
+import torch
+
+# Importing GLOVE
+from torchnlp.word_to_vector import GloVe
 
 np.random.seed(2017)
 
@@ -36,9 +40,12 @@ class BaseData:
         self.item_idx = {}
         self.item_idx_counter = 0
 
+        # GloVe vectors
+        self.glove_dict = GloVe(name = '6B', dim = 100)
+        
         self.data = self.parse_data()
         self.train_data, self.val_data, self.test_data = self.split_data()
-        self.word2idx, self.idx2word = self.make_mappings(self.train_data)
+        self.word2idx, self.idx2word, self.glove_embedding_matrix = self.make_mappings(self.train_data)
         self.generate_review_idx(self.val_data)
         self.generate_review_idx(self.test_data)
 
@@ -75,6 +82,17 @@ class BaseData:
         word2idx = {PAD_WORD:PAD_INDEX, START_WORD:START_INDEX, END_WORD:END_INDEX, UNK_WORD:UNK_INDEX}
         idx2word = {PAD_INDEX:PAD_WORD, START_INDEX:START_WORD, END_INDEX:END_WORD, UNK_INDEX:UNK_WORD}
 
+        ##### GLOVE PART #####
+        glove_vector_list = []
+        ######################
+
+        #### GLOVE VECTORS FOR THE SPECIAL TOKENS ####
+        #### FIRST 4 POSITIONS ARE RESERVED FOR THESE TOKENS ####
+        for special_token in ['<PAD>', '<STR>', '<END>', '<UNK>']:
+            glove_vector_list.append(self.glove_dict[special_token])
+        ###############################################
+
+
         word_counter = Counter(self.text_data)
         vocab_file = open("vocab.txt", "w")
         for review_id in data.keys():
@@ -89,6 +107,10 @@ class BaseData:
                         vocab_file.write(str(self.index_counter) + " - " + word + "\n")
                         # Add word idx to review
                         review_sentence_idxs.append(self.index_counter)
+
+                        #### ADDING GLOVE VECTOR OF THE WORD TO THE LIST ####
+                        glove_vector_list.append(self.glove_dict[word])
+
                     else:
                         review_sentence_idxs.append((word2idx[word]))
                 else:
@@ -96,7 +118,13 @@ class BaseData:
 
             review_sentence_idxs.append(END_INDEX)
             data[review_id]['review'] = review_sentence_idxs
-        return word2idx, idx2word
+        
+        #### STACKING THE LIST OF TENSORS INTO A 2D TENSOR ####
+        glove_vector_list = torch.stack(glove_vector_list, dim = 0)
+        # print("GLOVE VECTOR LIST : {}".format(glove_vector_list.shape))
+        glove_embedding_matrix = torch.nn.Embedding.from_pretrained(glove_vector_list)
+
+        return word2idx, idx2word, glove_embedding_matrix
 
     def generate_review_idx(self, data):
         for review_id in data.keys():

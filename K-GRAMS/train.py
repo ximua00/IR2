@@ -96,6 +96,7 @@ def validate(config, model, vocab_size, data_generator, dataset_object):
         review_gen_loss = ce_loss(review_probabilities.detach(), target_reviews_y.view(-1))
         review_batch_loss.append(review_gen_loss.item())
         rating_batch_loss.append(rating_pred_loss.item())
+        break
     return np.mean(rating_batch_loss), np.mean(review_batch_loss)
 
 def train(config):
@@ -104,6 +105,10 @@ def train(config):
     dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user=8)
     dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=8)
     dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
+
+    #### OBTAINING THE GLOVE WORD EMBEDDING MATRIX ####
+    glove_embedding_matrix = dataset_train.glove_embedding_matrix
+    ##############################################################
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
@@ -123,7 +128,8 @@ def train(config):
                         latent_size=256,
                         num_of_lstm_layers = 1,
                         num_directions = 1,
-                        lstm_hidden_dim = 128)
+                        lstm_hidden_dim = 128,
+                        glove_embedding_matrix = glove_embedding_matrix)
     kgrams_model = kgrams_model.to(device) 
 
     data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
