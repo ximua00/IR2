@@ -63,7 +63,7 @@ def test(config, model, dataset):
         # print("--------Generated Review--------------")
         # print(generated_review)
 
-        break
+        # break
 
 
 def validate(config, model, vocab_size, data_generator, dataset_object):
@@ -96,7 +96,7 @@ def validate(config, model, vocab_size, data_generator, dataset_object):
         review_gen_loss = ce_loss(review_probabilities.detach(), target_reviews_y.view(-1))
         review_batch_loss.append(review_gen_loss.item())
         rating_batch_loss.append(rating_pred_loss.item())
-        break
+        # break
     return np.mean(rating_batch_loss), np.mean(review_batch_loss)
 
 def train(config):
@@ -162,7 +162,9 @@ def train(config):
     for epoch in range(config.epochs):
         rating_loss = []
         review_loss = []
+        # print("Number of training Batches : {}".format(len(data_generator_train)))
         for batch_num, batch in enumerate(data_generator_train):
+            # print("Batch Number : {}".format(batch_num))
             target_user_ids = batch[0].to(device)
             target_item_ids = batch[1].to(device)
             target_ratings = batch[2].to(device)
@@ -191,7 +193,7 @@ def train(config):
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
-            break
+            # break
         if (epoch % config.eval_freq == 0):
             PATH = "models/model_"+str(epoch)+".pt"
             torch.save(kgrams_model.state_dict(), PATH)
@@ -206,8 +208,8 @@ def train(config):
             print("--------------Generating review--------------------")
             test(config, kgrams_model, dataset_test)
             print("---------------------------------------------------")
-            break
-        break
+            # break
+        # break
     print("Training Completed!")
     dump_pickle("train_rating_loss.pkl", train_rating_loss)
     dump_pickle("train_review_loss.pkl", train_review_loss)
