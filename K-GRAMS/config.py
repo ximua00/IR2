@@ -10,7 +10,7 @@ config.add_argument('-length', '--review_length', required=False, type=int, defa
 config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
 config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.001, help='NARRE learning rate')
 config.add_argument('-mlr', '--mrg_learning_rate', required=False, type=float, default=0.0003, help='MRG learning rate')
-config.add_argument('-epochs', '--epochs', required=False, type=int, default=2501, help='epochs')
+config.add_argument('-epochs', '--epochs', required=False, type=int, default=40, help='epochs')
 config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default=100, help='Word embedding size')
 config.add_argument('-iembed', '--id_embedding_size', required=False, type=int, default=100, help='Item/User embedding size')
 config.add_argument('-efreq', '--eval_freq', required=False, type=int, default=50,help='Evaluation Frequency')
