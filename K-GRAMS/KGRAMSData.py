@@ -2,6 +2,8 @@ import pickle
 from collections import defaultdict
 import torch
 import copy
+import sys
+sys.path.append("..")
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from BaseData import BaseData

@@ -1,5 +1,7 @@
 import torch
 import argparse
+import sys
+sys.path.append("..")
 from config import config, device
 from KGRAMSData import KGRAMSData, KGRAMSEvalData, KGRAMSTrainData
 from model import KGRAMS
@@ -8,6 +10,10 @@ import torch.nn as nn
 import numpy as np
 import pickle as pickle
 import sys
+from tqdm import tqdm
+
+from utils import plot_loss, make_directory
+
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -102,9 +108,8 @@ def validate(config, model, vocab_size, data_generator, dataset_object):
 def train(config):
     data_path = config.root_dir + config.data_set_name
     print("Processing Data - ", data_path)
-    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user=8)
-    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=8)
-    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
+    dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user=config.num_reviews_per_user)
+    dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=config.num_reviews_per_user)
 
     #### OBTAINING THE GLOVE WORD EMBEDDING MATRIX ####
     glove_embedding_matrix = dataset_train.glove_embedding_matrix
@@ -124,16 +129,16 @@ def train(config):
                         user_id_embedding_idx=user_embedding_idx,
                         item_id_embedding_idx=item_embedding_idx,
                         id_embedding_size=config.id_embedding_size,
-                        hidden_size=128,
-                        latent_size=256,
+                        hidden_size=64,
+                        latent_size=64,
                         num_of_lstm_layers = 1,
                         num_directions = 1,
                         lstm_hidden_dim = 128,
                         glove_embedding_matrix = glove_embedding_matrix)
     kgrams_model = kgrams_model.to(device) 
 
-    data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
-    data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
+    data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
+    data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
 
 
     mse_loss = nn.MSELoss()
@@ -159,7 +164,7 @@ def train(config):
     val_rating_loss = []
     val_review_loss = []
 
-    for epoch in range(config.epochs):
+    for epoch in tqdm(range(config.epochs)):
         rating_loss = []
         review_loss = []
         # print("Number of training Batches : {}".format(len(data_generator_train)))
@@ -190,6 +195,8 @@ def train(config):
             optimizer.zero_grad()
             rating_pred_loss.backward(retain_graph = True)
             review_gen_loss.backward()
+            torch.nn.utils.clip_grad_norm(kgrams_model.parameters(), max_norm=10.0)
+
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
@@ -205,17 +212,14 @@ def train(config):
             train_review_loss.append((np.mean(review_loss)))
             val_rating_loss.append(avg_rating_loss)
             val_review_loss.append(avg_rev_loss)
-            print("--------------Generating review--------------------")
-            test(config, kgrams_model, dataset_test)
-            print("---------------------------------------------------")
-            # break
-        # break
-    print("Training Completed!")
-    dump_pickle("train_rating_loss.pkl", train_rating_loss)
-    dump_pickle("train_review_loss.pkl", train_review_loss)
-    dump_pickle("val_rating_loss.pkl", val_rating_loss)
-    dump_pickle("val_review_loss.pkl", val_review_loss)
-
+        
+        if (epoch % config.save_freq == 0):
+            save_path = make_directory("./models/" + config.exp_name)
+            torch.save(kgrams_model, save_path + "/model_" + str(epoch) + ".pt")
+            
+    print("Training Completed!")    
+    plot_loss(train_rating_loss, val_rating_loss, "rating", config.exp_name)
+    plot_loss(train_review_loss, val_review_loss, "review", config.exp_name)
 
 
     return kgrams_model
@@ -224,22 +228,3 @@ def train(config):
 
 if __name__ == "__main__":
     model = train(config)
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
-    # config = argparse.ArgumentParser()
-    # config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
-    # config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Digital_Music_5.json", help='Dataset')
-    # config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
-    # config.add_argument('-batch_size', '--batch_size', required=False, type=int, default=5, help='Batch size')
-    # config.add_argument('-nlr', '--narre_learning_rate', required=False, type=float, default=0.01, help='NARRE learning rate')
-    # config.add_argument('-mlr', '--mrg_learning_rate', required=False, type=float, default=0.0003, help='MRG learning rate')
-    # config.add_argument('-epochs', '--epochs', required=False, type=int, default=1, help='epochs')
-    # config.add_argument('-wembed', '--word_embedding_size', required=False, type=int, default= 1024, help='Word embedding size')
-    # config.add_argument('-iembed', '--id_embedding_size', required=False, type=int, default=100, help='Item/User embedding size')
-    # config.add_argument('-efreq', '--eval_freq', required=False, type=int, default=100,help='Evaluation Frequency')
-    # config = config.parse_args()
-    # model = train(config)
-    # data_path = config.root_dir + config.data_set_name
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
-    # test(config, model, dataset_test)
-    #"Musical_Instruments_5.json"
-    #Digital_Music_5.json
