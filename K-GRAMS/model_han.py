@@ -184,9 +184,9 @@ class main_model(nn.Module):
     
     
     def normalize(x):
-    x_normed = (x-  x.min(0, keepdim=True)[0]) / (x.max(0, keepdim=True)[0]-  x.min(0, keepdim=True)[0])
-    return x_normed
-    
+        x_normed = (x-  x.min(0, keepdim=True)[0]) / (x.max(0, keepdim=True)[0]-  x.min(0, keepdim=True)[0])
+        return x_normed
+
     def __init__(self, embed_dim, hidden_dim, layers, dropout_lstm, dropout_input, dropout_FC, dropout_lstm_2, dropout_input_2, dropout_attention, batch_size):
        
         super(main_model, self).__init__()
