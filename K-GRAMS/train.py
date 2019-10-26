@@ -106,7 +106,7 @@ def train(config):
     print("Processing Data - ", data_path)
     dataset_train = KGRAMSTrainData(data_path, config.review_length, num_reviews_per_user=config.num_reviews_per_user)
     dataset_val = KGRAMSEvalData(data_path, config.review_length, mode="validate", num_reviews_per_user=config.num_reviews_per_user)
-    # dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=8)
+    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test", num_reviews_per_user=config.num_reviews_per_user)
 
     vocab_size = dataset_train.vocab_size
     print("vocab size ", vocab_size)
@@ -131,6 +131,7 @@ def train(config):
 
     data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
     data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
+    data_generator_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
 
     mse_loss = nn.MSELoss()
     crossentr_loss = nn.CrossEntropyLoss()
