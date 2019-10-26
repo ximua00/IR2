@@ -3,6 +3,7 @@ from config import config, device
 from torch.utils.data import DataLoader
 from KGRAMSData import KGRAMSEvalData, KGRAMSTrainData
 from utils import make_directory
+import torch.nn as nn
 
 def get_reviews_from_batch(batch_rev, idx2word_dict):
     review_list = []
@@ -15,7 +16,7 @@ def get_reviews_from_batch(batch_rev, idx2word_dict):
     return review_list
 
 
-def generate_reviews(config, model, data_loader, idx2word_dict):
+def generate_reviews(config, model, data_loader, dataset_object, idx2word_dict):
     all_actual_reviews = []
     all_generated_reviews = []
     gen_ratings = []
@@ -36,6 +37,7 @@ def generate_reviews(config, model, data_loader, idx2word_dict):
                                           item_reviews=item_reviews,
                                           item_ids_of_reviews=review_item_ids,
                                           target_reviews_x=None,
+                                          dataset_object = dataset_object,
                                           mode="test")
 
         orig_ratings.append(target_ratings.squeeze())
@@ -55,9 +57,10 @@ if __name__ == "__main__":
 
     dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
     data_loader = DataLoader(dataset_test, config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
+    print(saved_model_path + "model_40.pt")
     model = torch.load(saved_model_path + "model_40.pt")
     
-    orig_reviews, generated_reviews, orig_ratings, gen_ratings = generate_reviews(config, model, data_loader, dataset_test.idx2word)
+    orig_reviews, generated_reviews, orig_ratings, gen_ratings = generate_reviews(config, model, data_loader, dataset_test, dataset_test.idx2word)
     mse_loss = nn.MSELoss()
     mse = mse_loss(gen_ratings.view(-1), orig_ratings.squeeze().view(-1).float())
     rmse = torch.sqrt(mse)
