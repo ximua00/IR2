@@ -5,7 +5,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 config = argparse.ArgumentParser()
 config.add_argument('-root', '--root_dir', required=False, type=str, default="../data/", help='Data root direcroty')
-config.add_argument('-exp_name', '--exp_name', required=True, type=str, help='Experiment Name')
+config.add_argument('-exp_name', '--exp_name', required=False, type=str, default="han", help='Experiment Name')
 config.add_argument('-dataset', '--data_set_name', required=False, type=str, default="Digital_Music_5.json", help='Dataset')
 config.add_argument('-length', '--review_length', required=False, type=int, default=80,help='Review Length')
 config.add_argument('-n_reviews', '--num_reviews_per_user', required=False, type=int, default=20, help='num_reviews_per_user')
