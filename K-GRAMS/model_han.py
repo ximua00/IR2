@@ -217,6 +217,10 @@ class main_model(nn.Module):
         # First BiLSTM
         encoded_words = self.embedding(rev_embeddings, rev_lengths) 
         averaged_sentences, attention, weighted = self.self_attention_sentence(encoded_words, rev_lengths.int())
+        sigm = nn.Sigmoid()
+        soft = nn.Softmax()
+        attention_list = normalize(soft(squezeed_lengths * attention.transpose(0,1)).transpose(0,1)).tolist()
+
         # rand_tensor_1 = torch.ones(rev_embeddings.shape[0])
         # doc_lengths = rand_tensor_1.new_full((rev_embeddings.shape[0]),num_of_reviews)
 
@@ -232,6 +236,72 @@ class main_model(nn.Module):
         # 2nd BiLSTM
         out_encoding = self.doc_embedding.forward(predicted_docs, doc_lengths) 
         averaged_docs, attention, weighted = self.self_attention(out_encoding, doc_lengths)
+        attention_list_sen = normalize(sigm(attention)).tolist()
+        return averaged_docs 
+
+class main_model_test(nn.Module):
+    
+    def __init__(self, embed_dim, hidden_dim, layers, dropout_lstm, dropout_input, dropout_FC, dropout_lstm_2, dropout_input_2, dropout_attention, batch_size):
+       
+        super(main_model, self).__init__()
+        
+        self.hidden_dim = hidden_dim
+        self.layers = layers
+        self.dropout_FC = dropout_FC
+        self.dropout_lstm = dropout_lstm
+        self.dropout_input = dropout_input
+        self.embedding = BiLSTMEncoder(embed_dim, hidden_dim, layers, dropout_lstm, dropout_input)
+        self.self_attention = SelfAttention(2*hidden_dim, dropout_attention)
+        self.self_attention_sentence = SelfAttention(2*hidden_dim, dropout_attention)
+        self.doc_embedding = BiLSTMEncoder(2*hidden_dim, hidden_dim, layers, dropout_lstm_2, dropout_input_2)
+        self.batch_size = batch_size
+        # self.l_softmax = lin_softmax(dropout_FC, num_classes, hidden_dim)
+        # self.doc_classifier = lin_softmax(dropout_FC, num_classes, hidden_dim)
+        if torch.cuda.is_available():
+            self.embedding.to(device = torch.device('cuda'))
+            # self.l_softmax.to(device=torch.device('cuda'))
+    
+    def forward(self, rev_embeddings, num_of_reviews):
+
+        if torch.cuda.is_available():
+            rev_embeddings = rev_embeddings.to(device=torch.device('cuda'))
+            # squezeed_lengths = squezeed_lengths.to(device=torch.device('cuda')) 
+        # squezeed = 45 x 82 x 1024
+        # squezeed = squezeed.squeeze()
+        # squezeed = squezeed.view(self.batch_size, review_len, squezeed.shape[1]) #5*81*1024
+        # rand_tensor = torch.ones(rev_embeddings.shape[0])
+        # rev_lengths = rand_tensor.new_full((rev_embeddings.shape[0]), rev_embeddings.shape[1])
+        rev_lengths = torch.ones(rev_embeddings.shape[0], 1) * rev_embeddings.shape[1]
+        
+        # First BiLSTM
+        encoded_words = self.embedding(rev_embeddings, rev_lengths) 
+        averaged_sentences, attention, weighted = self.self_attention_sentence(encoded_words, rev_lengths.int())
+        sigm = nn.Sigmoid()
+        soft = nn.Softmax()
+        attention_list = normalize(soft(squezeed_lengths * attention.transpose(0,1)).transpose(0,1)).tolist()
+
+        # rand_tensor_1 = torch.ones(rev_embeddings.shape[0])
+        # doc_lengths = rand_tensor_1.new_full((rev_embeddings.shape[0]),num_of_reviews)
+
+        doc_lengths = torch.ones(self.batch_size, 1) * num_of_reviews
+        doc_lengths = doc_lengths.squeeze()
+
+        predicted_docs = torch.split(averaged_sentences, split_size_or_sections = num_of_reviews)
+        predicted_docs = torch.stack(predicted_docs, dim = 0)
+        # print(predicted_docs.shape)
+        # predicted_docs = predicted_docs.view(predicted_docs.shape[0] * predicted_docs.shape[1], predicted_docs.shape[2])
+        # predicted_docs = pad_sequence(predicted_docs, batch_first=True, padding_value=0)
+        
+        # 2nd BiLSTM
+        out_encoding = self.doc_embedding.forward(predicted_docs, doc_lengths) 
+        averaged_docs, attention, weighted = self.self_attention(out_encoding, doc_lengths)
+#         if(mode == "test"):
+        attention_list_sen = normalize(sigm(attention)).tolist()
+        with open('attention_stuff.csv', 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter='\n')
+            for i, j in zip(attention_list, attention_list_sen):
+                writer.writerow((str(i), j))
         # class_prediction = self.doc_classifier(prediction)
         return averaged_docs 
+
 
