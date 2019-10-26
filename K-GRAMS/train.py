@@ -67,6 +67,7 @@ def test(config, model, dataset):
         # print(generated_review)
 
         break
+
 def test_attention_values(config, model, dataset, fname = "attention_stuff.csv" , fname2 = "att_txt.txt"):
     data_generator = DataLoader(dataset, config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
     for input in data_generator:
@@ -89,13 +90,13 @@ def test_attention_values(config, model, dataset, fname = "attention_stuff.csv" 
         
 
         # print(word_idx_seq)
-        actual_review = get_one_review_from_batch(target_reviews.tolist(), dataset.idx2word)
-        generated_review = get_one_review_from_batch(word_idx_seq, dataset.idx2word)
-        for (orig, gen) in zip(actual_review, generated_review):
-            print("------Original Review----------------")
-            print(orig)
-            print("--------Generated Review--------------")
-            print(gen)
+        # actual_review = get_one_review_from_batch(target_reviews.tolist(), dataset.idx2word)
+        # generated_review = get_one_review_from_batch(word_idx_seq, dataset.idx2word)
+        # for (orig, gen) in zip(actual_review, generated_review):
+        #     print("------Original Review----------------")
+        #     print(orig)
+        #     print("--------Generated Review--------------")
+        #     print(gen)
 
         # generated_review = get_one_review_from_batch(word_idx_seq.tolist(), dataset.idx2word)
         # print("------Original Review----------------")
@@ -119,8 +120,6 @@ def test_attention_values(config, model, dataset, fname = "attention_stuff.csv" 
                 all = []
                 for i, row in enumerate(zip(reader,text)):
                     new_row = []
-                    #print(zip(row[0][0][:len(row[1])],row[1]))
-                    #new_row.append(predicted_meta[i])
                     activation_maps_words.append(list(zip(row[1], ast.literal_eval(row[0][0])[:len(row[1])])))
                     new_row.append(list(zip(row[1], ast.literal_eval(row[0][0])[:len(row[1])])))#,predicted_meta[i])))
                     new_row.append(row[0][1])
@@ -252,7 +251,7 @@ def train(config):
             optimizer.step()
             rating_loss.append(rating_pred_loss.item())
             review_loss.append(review_gen_loss.item())
-#             break
+            # break
         if (epoch % config.eval_freq == 0):
             PATH = "models/model_"+str(epoch)+".pt"
             torch.save(kgrams_model.state_dict(), PATH)
@@ -264,7 +263,8 @@ def train(config):
             train_review_loss.append((np.mean(review_loss)))
             val_rating_loss.append(avg_rating_loss)
             val_review_loss.append(avg_rev_loss)
-            ac_m = test_attention_values(config, kgrams_model, dataset_test, fname = "attention_stuff.csv" , fname2 = "att_txt.txt")
+            test(config, kgrams_model, dataset_test)
+            # ac_m = test_attention_values(config, kgrams_model, dataset_test, fname = "attention_stuff.csv" , fname2 = "att_txt.txt")
 
         if (epoch % config.save_freq == 0):
              save_path = make_directory("./models/" + config.exp_name)
