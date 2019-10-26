@@ -214,12 +214,7 @@ class main_model(nn.Module):
 
         if torch.cuda.is_available():
             rev_embeddings = rev_embeddings.to(device=torch.device('cuda'))
-            # squezeed_lengths = squezeed_lengths.to(device=torch.device('cuda')) 
-        # squezeed = 45 x 82 x 1024
-        # squezeed = squezeed.squeeze()
-        # squezeed = squezeed.view(self.batch_size, review_len, squezeed.shape[1]) #5*81*1024
-        # rand_tensor = torch.ones(rev_embeddings.shape[0])
-        # rev_lengths = rand_tensor.new_full((rev_embeddings.shape[0]), rev_embeddings.shape[1])
+
         rev_lengths = torch.ones(rev_embeddings.shape[0], 1) * rev_embeddings.shape[1]
         
         # First BiLSTM
@@ -229,27 +224,25 @@ class main_model(nn.Module):
             sigm = nn.Sigmoid()
             soft = nn.Softmax()
             rev_lengths = rev_lengths.to(device)
-            attention_list = normalize(soft(rev_lengths * attention).transpose(0,1)).tolist()
-
-        # rand_tensor_1 = torch.ones(rev_embeddings.shape[0])
-        # doc_lengths = rand_tensor_1.new_full((rev_embeddings.shape[0]),num_of_reviews)
+            attention_list = normalize(soft(rev_lengths * attention)).tolist()
+        # shape of attention list : 640 X 82 (32*20 reviews with 82 words per review)
 
         doc_lengths = torch.ones(self.batch_size, 1) * num_of_reviews
         doc_lengths = doc_lengths.squeeze()
 
         predicted_docs = torch.split(averaged_sentences, split_size_or_sections = num_of_reviews)
         predicted_docs = torch.stack(predicted_docs, dim = 0)
-        # print(predicted_docs.shape)
-        # predicted_docs = predicted_docs.view(predicted_docs.shape[0] * predicted_docs.shape[1], predicted_docs.shape[2])
-        # predicted_docs = pad_sequence(predicted_docs, batch_first=True, padding_value=0)
         
         # 2nd BiLSTM
         out_encoding = self.doc_embedding.forward(predicted_docs, doc_lengths) 
         averaged_docs, attention, weighted = self.self_attention(out_encoding, doc_lengths)
         if(mode == 'test'):
             attention_list_sen = normalize(sigm(attention)).tolist()
+            attention_list_sen_flat = [item for sublist in attention_list_sen for item in sublist]
+            # print("Shape of flattened attention sentences", len(attention_list_sen_flat))
+            # shape of attention_list_sen : 32 * 20  (32 data-points, 20 reviews per user(datapoint))
             with open('attention_stuff.csv', 'w') as csvfile:
               writer = csv.writer(csvfile, delimiter='\n')
-              for i, j in zip(attention_list, attention_list_sen):
+              for i, j in zip(attention_list, attention_list_sen_flat):
                   writer.writerow((str(i), j))
         return averaged_docs 
