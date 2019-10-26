@@ -116,9 +116,9 @@ class KGRAMS(nn.Module):
 
     def forward(self, user_ids, user_reviews, user_ids_of_reviews, item_ids, item_reviews, item_ids_of_reviews, target_reviews_x, dataset_object, mode = "train"):
         self.dataset_object = dataset_object
-        users_features =  self.user_net(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings, dataset_object, self.han)
+        users_features =  self.user_net(user_ids, user_reviews, item_ids_of_reviews, self.word_embeddings, dataset_object, self.han, mode)
         # 5 x 356
-        items_features =  self.item_net(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings, dataset_object, self.han)
+        items_features =  self.item_net(item_ids, item_reviews, user_ids_of_reviews, self.word_embeddings, dataset_object, self.han, mode)
         # 5 x 356
         user_item_features = users_features * items_features  #h_0 = q_u + X_u * p_i + Y_i
         # 5 x 356
@@ -189,7 +189,7 @@ class EntityNet(nn.Module):
         self.linear = nn.Linear(out_channels, latent_size)
         
 
-    def forward(self, target_id, reviews, review_ids, word_embeddings, dataset_object, han_object):
+    def forward(self, target_id, reviews, review_ids, word_embeddings, dataset_object, han_object, mode):
         batch_size = reviews.size(0)
         num_of_reviews = reviews.size(1)
         review_length = reviews.size(2)
@@ -221,7 +221,7 @@ class EntityNet(nn.Module):
         # reviews_importance = torch.matmul(review_attentions, review_feats.view(batch_size, num_of_reviews, -1) )
         # entity_features = self.linear(reviews_importance) #Y_i =W_0 * O_i + b_0        
         # Implementing HAN
-        entity_features = han_object(rev_embeddings, num_of_reviews)    
+        entity_features = han_object(rev_embeddings, num_of_reviews, mode)    
         # print("Han output",entity_features.shape) # 5 x 256
         target_id_embedding = self.entity_id_embeddings(target_id).view(batch_size,1, -1) #p_i # [5, 1, 100]
         # print(target_id_embedding.shape)

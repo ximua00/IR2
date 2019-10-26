@@ -34,3 +34,5 @@ Temporary Items
 *.txt
 *.pt
 *.7z
+
+.word_vectors_cache

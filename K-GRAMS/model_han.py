@@ -202,7 +202,7 @@ class main_model(nn.Module):
             self.embedding.to(device = torch.device('cuda'))
             # self.l_softmax.to(device=torch.device('cuda'))
     
-    def forward(self, rev_embeddings, num_of_reviews):
+    def forward(self, rev_embeddings, num_of_reviews, mode):
 
         if torch.cuda.is_available():
             rev_embeddings = rev_embeddings.to(device=torch.device('cuda'))
