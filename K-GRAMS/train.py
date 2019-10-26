@@ -32,7 +32,7 @@ def get_one_review_from_batch(word_idx_batch_list, idx2word):
     return batch_reviews
 
 def test(config, model, dataset):
-    data_generator = DataLoader(dataset, config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
+    data_generator = DataLoader(dataset, config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
     for input in data_generator:
         target_user_id = input[0].to(device)
         target_item_id = input[1].to(device)
@@ -67,6 +67,69 @@ def test(config, model, dataset):
         # print(generated_review)
 
         break
+def test_attention_values(config, model, dataset, fname = "attention_stuff.csv" , fname2 = "att_txt.txt"):
+    data_generator = DataLoader(dataset, config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
+    for input in data_generator:
+        target_user_id = input[0].to(device)
+        target_item_id = input[1].to(device)
+        user_reviews = input[4].to(device)
+        item_reviews = input[5].to(device)
+        target_reviews = torch.stack(input[3], dim=1).view(config.batch_size, -1).to(device)
+        review_user_ids = torch.stack(input[6], dim=1).view(config.batch_size, -1).to(device)
+        review_item_ids = torch.stack(input[7], dim=1).view(config.batch_size, -1).to(device)
+        rating_pred, word_idx_seq = model(user_ids=target_user_id,
+                                        user_reviews=user_reviews,
+                                        user_ids_of_reviews=review_user_ids,
+                                        item_ids=target_item_id,
+                                        item_reviews=item_reviews,
+                                        item_ids_of_reviews=review_item_ids,
+                                        target_reviews_x=None,
+                                        dataset_object = dataset,
+                                        mode = "test")
+        
+
+        # print(word_idx_seq)
+        actual_review = get_one_review_from_batch(target_reviews.tolist(), dataset.idx2word)
+        generated_review = get_one_review_from_batch(word_idx_seq, dataset.idx2word)
+        for (orig, gen) in zip(actual_review, generated_review):
+            print("------Original Review----------------")
+            print(orig)
+            print("--------Generated Review--------------")
+            print(gen)
+
+        # generated_review = get_one_review_from_batch(word_idx_seq.tolist(), dataset.idx2word)
+        # print("------Original Review----------------")
+        # print(actual_review)
+        # print("--------Generated Review--------------")
+        # print(generated_review)
+
+        break
+    import ast
+    import csv
+    
+    activation_maps = []
+    activation_maps_words = []
+    activation_maps_sen = []
+    with open(fname,'r') as csvinput:
+        with open('output.csv', 'w') as csvoutput:
+            with open(fname2, 'r') as textfile:
+                writer = csv.writer(csvoutput, delimiter='\t', lineterminator='\n')
+                reader = csv.reader(csvinput, delimiter='\t')
+                text = csv.reader(textfile, delimiter='\t', lineterminator='   ')
+                all = []
+                for i, row in enumerate(zip(reader,text)):
+                    new_row = []
+                    #print(zip(row[0][0][:len(row[1])],row[1]))
+                    #new_row.append(predicted_meta[i])
+                    activation_maps_words.append(list(zip(row[1], ast.literal_eval(row[0][0])[:len(row[1])])))
+                    new_row.append(list(zip(row[1], ast.literal_eval(row[0][0])[:len(row[1])])))#,predicted_meta[i])))
+                    new_row.append(row[0][1])
+                    activation_maps_sen.append(row[0][1])
+                    all.append(new_row)
+        
+                writer.writerows(all)
+    activation_maps = list(zip(activation_maps_words, activation_maps_sen))            
+    return activation_maps
 
 
 def validate(config, model, vocab_size, data_generator, dataset_object):
