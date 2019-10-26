@@ -194,7 +194,7 @@ def train(config):
 
     data_generator_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
     data_generator_val = DataLoader(dataset_val, batch_size=config.batch_size, shuffle=True, num_workers=4, drop_last=True, timeout=0)
-    data_generator_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
+#     data_generator_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=False, num_workers=4, drop_last=True, timeout=0)
 
     mse_loss = nn.MSELoss()
     crossentr_loss = nn.CrossEntropyLoss()
@@ -264,6 +264,7 @@ def train(config):
             train_review_loss.append((np.mean(review_loss)))
             val_rating_loss.append(avg_rating_loss)
             val_review_loss.append(avg_rev_loss)
+            ac_m = test_attention_values(config, kgrams_model, dataset_test, fname = "attention_stuff.csv" , fname2 = "att_txt.txt")
 
         if (epoch % config.save_freq == 0):
              save_path = make_directory("./models/" + config.exp_name)
