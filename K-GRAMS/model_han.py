@@ -1,3 +1,4 @@
+
 import time
 import numpy as np
 import torch
@@ -8,8 +9,11 @@ from torch.nn.utils.rnn import pad_packed_sequence
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import sys
+import config
+import csv
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+# device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = config.device
 
 class BiLSTMEncoder(nn.Module):
 
@@ -179,13 +183,12 @@ def sort_batch_by_length(tensor: torch.Tensor, sequence_lengths: torch.Tensor):
     restoration_indices = index_range.index_select(0, reverse_mapping)
     return sorted_tensor, sorted_sequence_lengths, restoration_indices, permutation_index
 
-
+def normalize(x):
+    x_normed = (x-  x.min(0, keepdim=True)[0]) / (x.max(0, keepdim=True)[0]-  x.min(0, keepdim=True)[0])
+    return x_normed
+    
 class main_model(nn.Module):
     
-    
-    def normalize(x):
-        x_normed = (x-  x.min(0, keepdim=True)[0]) / (x.max(0, keepdim=True)[0]-  x.min(0, keepdim=True)[0])
-        return x_normed
 
     def __init__(self, embed_dim, hidden_dim, layers, dropout_lstm, dropout_input, dropout_FC, dropout_lstm_2, dropout_input_2, dropout_attention, batch_size):
        
@@ -225,7 +228,8 @@ class main_model(nn.Module):
         if(mode == 'test'):
             sigm = nn.Sigmoid()
             soft = nn.Softmax()
-            attention_list = normalize(soft(squezeed_lengths * attention.transpose(0,1)).transpose(0,1)).tolist()
+            rev_lengths = rev_lengths.to(device)
+            attention_list = normalize(soft(rev_lengths * attention).transpose(0,1)).tolist()
 
         # rand_tensor_1 = torch.ones(rev_embeddings.shape[0])
         # doc_lengths = rand_tensor_1.new_full((rev_embeddings.shape[0]),num_of_reviews)
@@ -245,8 +249,7 @@ class main_model(nn.Module):
         if(mode == 'test'):
             attention_list_sen = normalize(sigm(attention)).tolist()
             with open('attention_stuff.csv', 'w') as csvfile:
-            writer = csv.writer(csvfile, delimiter='\n')
-            for i, j in zip(attention_list, attention_list_sen):
-                writer.writerow((str(i), j))
+              writer = csv.writer(csvfile, delimiter='\n')
+              for i, j in zip(attention_list, attention_list_sen):
+                  writer.writerow((str(i), j))
         return averaged_docs 
-
