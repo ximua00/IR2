@@ -16,7 +16,7 @@ def get_reviews_from_batch(batch_rev, idx2word_dict):
     return review_list
 
 
-def generate_reviews(config, model, data_loader, dataset_object, idx2word_dict):
+def generate_reviews(config, model, data_loader, dataset_object_t, idx2word_dict):
     all_actual_reviews = []
     all_generated_reviews = []
     gen_ratings = []
@@ -37,7 +37,7 @@ def generate_reviews(config, model, data_loader, dataset_object, idx2word_dict):
                                           item_reviews=item_reviews,
                                           item_ids_of_reviews=review_item_ids,
                                           target_reviews_x=None,
-                                          dataset_object = dataset_object,
+                                          dataset_object=dataset_object_t,
                                           mode="test")
 
         orig_ratings.append(target_ratings.squeeze())
@@ -50,15 +50,16 @@ def generate_reviews(config, model, data_loader, dataset_object, idx2word_dict):
 
 
 if __name__ == "__main__":
-    saved_model_path = make_directory("models/" + config.exp_name + "/")
+    # saved_model_path = make_directory("models/" + config.exp_name + "/")
+    saved_model_path = "models/"
     golden_dir = make_directory("log/" + config.exp_name + "/golden/")
     generated_dir = make_directory("log/" + config.exp_name + "/generated/")
     data_path = config.root_dir + config.data_set_name
 
-    dataset_test = KGRAMSEvalData(data_path, config.review_length, mode="test")
+    dataset_test = KGRAMSEvalData(data_path, config.review_length, num_reviews_per_user=20, mode="test")
     data_loader = DataLoader(dataset_test, config.batch_size, shuffle=True, num_workers=0, drop_last=True, timeout=0)
-    print(saved_model_path + "model_40.pt")
-    model = torch.load(saved_model_path + "model_40.pt")
+    print(saved_model_path + "hanmodel.pt")
+    model = torch.load(saved_model_path + "hanmodel.pt")
     
     orig_reviews, generated_reviews, orig_ratings, gen_ratings = generate_reviews(config, model, data_loader, dataset_test, dataset_test.idx2word)
     mse_loss = nn.MSELoss()

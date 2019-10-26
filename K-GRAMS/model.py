@@ -193,35 +193,12 @@ class EntityNet(nn.Module):
         batch_size = reviews.size(0)
         num_of_reviews = reviews.size(1)
         review_length = reviews.size(2)
-        # ELMO part
-        # print(reviews.shape) # 5 x 9 x 82
-        # review_words = convert_batch_indices_to_word(reviews, dataset_object)
-        # character_ids = batch_to_ids(review_words)
-        # elmo_embeddings_dict = elmo(character_ids)
-        # rev_embeddings = elmo_embeddings_dict['elmo_representations'][0]
-        # print(rev_embeddings.shape) # 45 x 82 x 1024
-        # input_embeddings = rev_embeddings.view(rev_embeddings.size(0), 1, rev_embeddings.size(1), rev_embeddings.size(2)).to(device)
-        # 45 x 1 x 82 x 1024 ; o/p size: batch_size X num_of_reviews X review_length X embedding_size
+
         input_embedding = reviews.view(reviews.size(0)*reviews.size(1), reviews.size(2))
         rev_embeddings = word_embeddings(input_embedding)  
-        # input_embeddings = rev_embeddings.view(rev_embeddings.size(0) * rev_embeddings.size(1), 1, rev_embeddings.size(2), rev_embeddings.size(3))
-        # x = self.conv2d(input_embeddings)  #o/p size:  num_of_reviews * out_channels * filter_out_size1 * filter_out_size2
-        # print("Size of x after conv2d", x.shape) # 45 x 100 X 80 X 925
-        # x = self.relu(x)
-        # review_feats = self.max_pool(x)
-        # print(review_feats.shape) # 45 X 100 X 80 X 1
-        # review_feats = review_feats.view(batch_size, num_of_reviews, -1) #4D : [batch_size * num_of_reviews] * out_channels * 1 * 1
-        # score_embedding = self.entity_score_embeddings(review_ids).view(batch_size, -1, num_of_reviews) #transposed for matmul
-        # print("Size of score embedding", score_embedding.shape) # 5 X 100 X 9
-        # review_attentions
-        # review_feats = review_feats.view(batch_size, -1, num_of_reviews)
-        # print(review_feats.shape) # 5 X 92500 X 9
-        # review_attentions = torch.matmul(self.h.view(1, -1), self.relu(torch.matmul(self.W_O, review_feats) + torch.matmul(self.W_u, score_embedding) + self.b1.view(-1,1))) + self.b2
-        # review_attentions = self.softmax(review_attentions)  #batch_size X num_of_reviews
-        # reviews_importance = torch.matmul(review_attentions, review_feats.view(batch_size, num_of_reviews, -1) )
-        # entity_features = self.linear(reviews_importance) #Y_i =W_0 * O_i + b_0        
+
         # Implementing HAN
-        entity_features = han_object(rev_embeddings, num_of_reviews)    
+        entity_features = han_object(rev_embeddings, num_of_reviews)
         # print("Han output",entity_features.shape) # 5 x 256
         target_id_embedding = self.entity_id_embeddings(target_id).view(batch_size,1, -1) #p_i # [5, 1, 100]
         # print(target_id_embedding.shape)
